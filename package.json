@@ -1,11 +1,4 @@
 {
-  "name": "image-collector",
-  "version": "1.0.0",
-  "description": "云端图片收集站 - 支持拖拽上传和多设备访问",
-  "scripts": {
-    "dev": "vercel dev",
-    "deploy": "vercel --prod"
-  },
   "dependencies": {
     "@vercel/blob": "^2.2.0",
     "multiparty": "^4.2.3"
