@@ -1,7 +1,8 @@
 // ========== DOM Elements ==========
-const uploadArea = document.getElementById('uploadArea');
+const uploadBtn = document.getElementById('uploadBtn');
 const fileInput = document.getElementById('fileInput');
-const uploadProgress = document.getElementById('uploadProgress');
+const uploadBar = document.getElementById('uploadBar');
+const dropOverlay = document.getElementById('dropOverlay');
 const gallery = document.getElementById('gallery');
 const imageModal = document.getElementById('imageModal');
 const modalImage = document.getElementById('modalImage');
@@ -30,31 +31,49 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ========== Event Listeners ==========
+let dragCounter = 0; // Track nested dragenter/dragleave
+
 function setupEventListeners() {
-  // Upload area click + keyboard
-  uploadArea.addEventListener('click', () => fileInput.click());
-  uploadArea.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      fileInput.click();
-    }
-  });
+  // Upload button click
+  uploadBtn.addEventListener('click', () => fileInput.click());
 
   // File selection
   fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
 
-  // Drag & drop upload
-  uploadArea.addEventListener('dragover', (e) => {
+  // Full-page drag & drop upload (only for external file drags, not card sorting)
+  function isFileDrag(e) {
+    return e.dataTransfer && e.dataTransfer.types.includes('Files');
+  }
+
+  document.addEventListener('dragenter', (e) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
-    uploadArea.classList.add('drag-over');
+    dragCounter++;
+    if (dragCounter === 1) {
+      dropOverlay.classList.add('active');
+    }
   });
-  uploadArea.addEventListener('dragleave', () => {
-    uploadArea.classList.remove('drag-over');
-  });
-  uploadArea.addEventListener('drop', (e) => {
+  document.addEventListener('dragover', (e) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
-    uploadArea.classList.remove('drag-over');
-    handleFiles(e.dataTransfer.files);
+  });
+  document.addEventListener('dragleave', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    dragCounter--;
+    if (dragCounter === 0) {
+      dropOverlay.classList.remove('active');
+    }
+  });
+  document.addEventListener('drop', (e) => {
+    if (dropOverlay.classList.contains('active')) {
+      e.preventDefault();
+      dragCounter = 0;
+      dropOverlay.classList.remove('active');
+      if (e.dataTransfer.files.length > 0) {
+        handleFiles(e.dataTransfer.files);
+      }
+    }
   });
 
   // Paste upload (Ctrl+V)
@@ -105,8 +124,7 @@ async function handleFiles(files) {
     return;
   }
 
-  uploadArea.querySelector('.upload-prompt').style.display = 'none';
-  uploadProgress.style.display = 'flex';
+  uploadBar.style.display = 'flex';
 
   let successCount = 0;
   for (const file of imageFiles) {
@@ -119,8 +137,7 @@ async function handleFiles(files) {
     }
   }
 
-  uploadArea.querySelector('.upload-prompt').style.display = 'block';
-  uploadProgress.style.display = 'none';
+  uploadBar.style.display = 'none';
   fileInput.value = '';
 
   if (successCount > 0) {
