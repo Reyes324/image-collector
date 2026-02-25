@@ -485,6 +485,8 @@ header h1 {
 .editor-toolbar {
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 8px 12px;
   background: #1E293B;
@@ -505,7 +507,7 @@ header h1 {
 }
 
 .toolbar-right {
-  margin-left: auto;
+  padding-left: 4px;
 }
 
 .tool-btn {
@@ -623,16 +625,22 @@ header h1 {
   z-index: 10;
 }
 
-.text-input-overlay input {
+.text-input-overlay textarea {
   background: transparent;
-  border: none;
-  border-bottom: 2px solid currentColor;
-  padding: 0;
+  border: 2px solid #3b82f6;
+  border-radius: 3px;
+  padding: 2px 4px;
   margin: 0;
   outline: none;
   font-weight: bold;
-  min-width: 20px;
+  min-width: 1.2em;
+  min-height: 1.4em;
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
   caret-color: currentColor;
+  line-height: 1.2;
+  display: block;
 }
 
 /* ========== Toast — Micro-interaction feedback ========== */

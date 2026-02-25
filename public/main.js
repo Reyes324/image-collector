@@ -381,6 +381,7 @@ let editorState = {
   fontSize: 1,        // index into FONT_SIZES
   annotations: [],    // {id, type, ...props}
   selectedId: null,
+  editingAnnotationId: null, // text annotation currently being edited
   dragging: false,
   drawing: false,
   dragOffsetX: 0,
@@ -390,6 +391,20 @@ let editorState = {
   baseImage: null,
   nextId: 1,
 };
+
+// Helper: measure multiline text bounding box
+function getTextMetrics(text, fontSizeIdx) {
+  const fs = getAbsFontSize(fontSizeIdx);
+  const ctx = editorCanvas.getContext('2d');
+  ctx.font = `bold ${fs}px "Plus Jakarta Sans", -apple-system, sans-serif`;
+  const lines = text.split('\n');
+  const lineHeight = fs * 1.2;
+  let maxWidth = 0;
+  for (const line of lines) {
+    maxWidth = Math.max(maxWidth, ctx.measureText(line).width);
+  }
+  return { width: maxWidth, height: lines.length * lineHeight, lineHeight, lines, fontSize: fs };
+}
 
 function setupEditor() {
   const thicknessGroup = document.getElementById('thicknessGroup');
@@ -460,10 +475,24 @@ function setupEditor() {
     onCanvasMouseUp({ clientX: t.clientX, clientY: t.clientY });
   });
 
-  // Text input
+  // Text input — Enter = newline (default textarea), Escape = cancel
   textInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') commitText();
-    else if (e.key === 'Escape') textInputOverlay.style.display = 'none';
+    if (e.key === 'Escape') {
+      editorState.editingAnnotationId = null;
+      textInputOverlay.style.display = 'none';
+      redrawCanvas();
+    }
+  });
+  textInput.addEventListener('input', autoResizeTextInput);
+
+  // Double-click canvas to re-edit existing text
+  editorCanvas.addEventListener('dblclick', (e) => {
+    const pos = getCanvasPos(e);
+    const hit = hitTest(pos);
+    if (hit && hit.type === 'text') {
+      editorState.dragging = false;
+      openTextEditMode(hit);
+    }
   });
 }
 
@@ -492,12 +521,9 @@ function hitTest(pos) {
         return ann;
       }
     } else if (ann.type === 'text') {
-      const ctx = editorCanvas.getContext('2d');
-      const fs = getAbsFontSize(ann.fontSizeIdx);
-      ctx.font = `bold ${fs}px "Plus Jakarta Sans", sans-serif`;
-      const w = ctx.measureText(ann.text).width;
-      if (pos.x >= ann.x - 4 && pos.x <= ann.x + w + 4 &&
-          pos.y >= ann.y - 4 && pos.y <= ann.y + fs + 4) {
+      const m = getTextMetrics(ann.text, ann.fontSizeIdx);
+      if (pos.x >= ann.x - 4 && pos.x <= ann.x + m.width + 4 &&
+          pos.y >= ann.y - 4 && pos.y <= ann.y + m.height + 4) {
         return ann;
       }
     }
@@ -625,6 +651,8 @@ function redrawCanvas() {
     ctx.drawImage(editorState.baseImage, 0, 0);
   }
   for (const ann of editorState.annotations) {
+    // Skip the annotation being edited in textarea
+    if (ann.id === editorState.editingAnnotationId) continue;
     if (ann.type === 'arrow') {
       drawArrow(ctx, ann.fromX, ann.fromY, ann.toX, ann.toY, ann.color, ann.thickness);
     } else if (ann.type === 'text') {
@@ -672,12 +700,14 @@ function drawArrow(ctx, fromX, fromY, toX, toY, color, lineW) {
 }
 
 function drawText(ctx, ann) {
-  const fs = getAbsFontSize(ann.fontSizeIdx);
+  const m = getTextMetrics(ann.text, ann.fontSizeIdx);
   ctx.save();
-  ctx.font = `bold ${fs}px "Plus Jakarta Sans", -apple-system, sans-serif`;
+  ctx.font = `bold ${m.fontSize}px "Plus Jakarta Sans", -apple-system, sans-serif`;
   ctx.fillStyle = ann.color;
   ctx.textBaseline = 'top';
-  ctx.fillText(ann.text, ann.x, ann.y);
+  for (let i = 0; i < m.lines.length; i++) {
+    ctx.fillText(m.lines[i], ann.x, ann.y + i * m.lineHeight);
+  }
   ctx.restore();
 }
 
@@ -689,11 +719,9 @@ function drawSelectionBox(ctx, ann) {
     w = Math.abs(ann.toX - ann.fromX) + 12;
     h = Math.abs(ann.toY - ann.fromY) + 12;
   } else {
-    const fs = getAbsFontSize(ann.fontSizeIdx);
-    ctx.font = `bold ${fs}px "Plus Jakarta Sans", sans-serif`;
-    const tw = ctx.measureText(ann.text).width;
+    const m = getTextMetrics(ann.text, ann.fontSizeIdx);
     x = ann.x - 4; y = ann.y - 4;
-    w = tw + 8; h = fs + 8;
+    w = m.width + 8; h = m.height + 8;
   }
   ctx.save();
   ctx.strokeStyle = '#0D9488';
@@ -706,9 +734,10 @@ function drawSelectionBox(ctx, ann) {
 // --- Text input ---
 function showTextInput(screenX, screenY, canvasX, canvasY) {
   const containerRect = editorCanvasContainer.getBoundingClientRect();
-  const canvasRect = editorCanvas.getBoundingClientRect();
-  const screenScale = editorCanvas.width / canvasRect.width;
+  const screenScale = getScreenScale();
   const screenFontSize = Math.round(getAbsFontSize(editorState.fontSize) / screenScale);
+
+  editorState.editingAnnotationId = null;
 
   textInputOverlay.style.display = 'block';
   textInputOverlay.style.left = (screenX - containerRect.left) + 'px';
@@ -718,26 +747,115 @@ function showTextInput(screenX, screenY, canvasX, canvasY) {
   textInput.style.fontSize = screenFontSize + 'px';
   textInput.style.fontFamily = '"Plus Jakarta Sans", -apple-system, sans-serif';
   textInput.style.lineHeight = '1.2';
-  textInput.placeholder = '';
   textInput.value = '';
   textInput.dataset.canvasX = canvasX;
   textInput.dataset.canvasY = canvasY;
+
+  // Initial size ~1 character
+  textInput.style.width = screenFontSize + 'px';
+  textInput.style.height = (screenFontSize * 1.4) + 'px';
+
   textInput.focus();
+}
+
+function openTextEditMode(ann) {
+  const canvasRect = editorCanvas.getBoundingClientRect();
+  const containerRect = editorCanvasContainer.getBoundingClientRect();
+  const screenScale = getScreenScale();
+  const screenFontSize = Math.round(getAbsFontSize(ann.fontSizeIdx) / screenScale);
+
+  // Set editor state to match annotation
+  editorState.editingAnnotationId = ann.id;
+  editorState.selectedId = null;
+  editorState.fontSize = ann.fontSizeIdx;
+  editorState.color = ann.color;
+
+  // Update toolbar buttons to reflect
+  document.querySelectorAll('.color-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.color === ann.color);
+  });
+  document.getElementById('fontSizeGroup').querySelectorAll('.size-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.fontsize) === ann.fontSizeIdx);
+  });
+
+  // Ensure text tool is active
+  document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+  document.querySelector('.tool-btn[data-tool="text"]').classList.add('active');
+  editorState.tool = 'text';
+  document.getElementById('thicknessGroup').style.display = 'none';
+  document.getElementById('fontSizeGroup').style.display = '';
+
+  // Position textarea at annotation's screen position
+  const sx = ann.x / screenScale + canvasRect.left - containerRect.left;
+  const sy = ann.y / screenScale + canvasRect.top - containerRect.top;
+
+  textInputOverlay.style.display = 'block';
+  textInputOverlay.style.left = sx + 'px';
+  textInputOverlay.style.top = sy + 'px';
+
+  textInput.style.color = ann.color;
+  textInput.style.fontSize = screenFontSize + 'px';
+  textInput.style.fontFamily = '"Plus Jakarta Sans", -apple-system, sans-serif';
+  textInput.style.lineHeight = '1.2';
+  textInput.value = ann.text;
+  textInput.dataset.canvasX = ann.x;
+  textInput.dataset.canvasY = ann.y;
+
+  textInput.focus();
+  autoResizeTextInput();
+  redrawCanvas();
+}
+
+function autoResizeTextInput() {
+  const screenScale = getScreenScale();
+  const screenFontSize = Math.round(getAbsFontSize(editorState.fontSize) / screenScale);
+
+  // Measure longest line width
+  const measureCtx = document.createElement('canvas').getContext('2d');
+  measureCtx.font = `bold ${screenFontSize}px "Plus Jakarta Sans", -apple-system, sans-serif`;
+
+  const lines = textInput.value.split('\n');
+  let maxWidth = screenFontSize; // minimum ~1 char
+  for (const line of lines) {
+    maxWidth = Math.max(maxWidth, measureCtx.measureText(line).width);
+  }
+
+  textInput.style.width = (maxWidth + screenFontSize * 0.6) + 'px';
+  textInput.style.height = 'auto';
+  textInput.style.height = textInput.scrollHeight + 'px';
 }
 
 function commitText() {
   const text = textInput.value.trim();
   textInputOverlay.style.display = 'none';
-  if (!text) return;
-  editorState.annotations.push({
-    id: editorState.nextId++,
-    type: 'text',
-    x: parseFloat(textInput.dataset.canvasX),
-    y: parseFloat(textInput.dataset.canvasY),
-    text,
-    color: editorState.color,
-    fontSizeIdx: editorState.fontSize,
-  });
+
+  if (editorState.editingAnnotationId) {
+    // Editing existing annotation
+    const ann = editorState.annotations.find(a => a.id === editorState.editingAnnotationId);
+    if (ann) {
+      if (text) {
+        ann.text = text;
+        ann.color = editorState.color;
+        ann.fontSizeIdx = editorState.fontSize;
+      } else {
+        // Empty text = delete annotation
+        editorState.annotations = editorState.annotations.filter(a => a.id !== editorState.editingAnnotationId);
+      }
+    }
+    editorState.editingAnnotationId = null;
+  } else {
+    // New annotation
+    if (!text) return;
+    editorState.annotations.push({
+      id: editorState.nextId++,
+      type: 'text',
+      x: parseFloat(textInput.dataset.canvasX),
+      y: parseFloat(textInput.dataset.canvasY),
+      text,
+      color: editorState.color,
+      fontSizeIdx: editorState.fontSize,
+    });
+  }
   redrawCanvas();
 }
 
@@ -796,6 +914,7 @@ function closeEditor() {
   textInputOverlay.style.display = 'none';
   editorState.drawing = false;
   editorState.dragging = false;
+  editorState.editingAnnotationId = null;
 }
 
 async function saveEditedImage() {
