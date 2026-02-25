@@ -606,20 +606,15 @@ header h1 {
 }
 
 .text-input-overlay input {
-  background: rgba(15, 23, 42, 0.85);
-  color: #F1F5F9;
-  border: 2px solid var(--primary);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 15px;
-  font-family: inherit;
-  min-width: 180px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid currentColor;
+  padding: 0;
+  margin: 0;
   outline: none;
-}
-
-.text-input-overlay input:focus {
-  border-color: var(--cta);
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.25);
+  font-weight: bold;
+  min-width: 20px;
+  caret-color: currentColor;
 }
 
 /* ========== Toast — Micro-interaction feedback ========== */

@@ -689,9 +689,19 @@ function drawSelectionBox(ctx, ann) {
 // --- Text input ---
 function showTextInput(screenX, screenY, canvasX, canvasY) {
   const containerRect = editorCanvasContainer.getBoundingClientRect();
+  const canvasRect = editorCanvas.getBoundingClientRect();
+  const screenScale = editorCanvas.width / canvasRect.width;
+  const screenFontSize = Math.round(getAbsFontSize(editorState.fontSize) / screenScale);
+
   textInputOverlay.style.display = 'block';
   textInputOverlay.style.left = (screenX - containerRect.left) + 'px';
   textInputOverlay.style.top = (screenY - containerRect.top) + 'px';
+
+  textInput.style.color = editorState.color;
+  textInput.style.fontSize = screenFontSize + 'px';
+  textInput.style.fontFamily = '"Plus Jakarta Sans", -apple-system, sans-serif';
+  textInput.style.lineHeight = '1.2';
+  textInput.placeholder = '';
   textInput.value = '';
   textInput.dataset.canvasX = canvasX;
   textInput.dataset.canvasY = canvasY;
