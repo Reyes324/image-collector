@@ -3,27 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>📸 图片收集站</title>
+  <title>图片文档集</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>📸 图片收集站</h1>
-      <p class="subtitle">拖拽或点击上传图片</p>
+      <div class="header-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+          <polyline points="21 15 16 10 5 21"></polyline>
+        </svg>
+      </div>
+      <h1>图片文档集</h1>
+      <p class="subtitle">拖拽、粘贴或点击上传图片</p>
     </header>
 
     <div class="upload-area" id="uploadArea">
       <input type="file" id="fileInput" accept="image/*" multiple style="display: none;">
       <div class="upload-prompt">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="17 8 12 3 7 8"></polyline>
-          <line x1="12" y1="3" x2="12" y2="15"></line>
-        </svg>
-        <p class="desktop-text">拖拽图片到这里</p>
-        <p class="mobile-text">点击上传图片</p>
-        <button class="upload-btn" id="uploadBtn">选择文件</button>
+        <div class="upload-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+        </div>
+        <p class="upload-text">拖拽图片到这里，或 <span class="upload-link">点击选择文件</span></p>
+        <p class="upload-hint">支持 Ctrl+V 粘贴图片 | JPG, PNG, GIF, WebP</p>
       </div>
       <div class="upload-progress" id="uploadProgress" style="display: none;">
         <div class="spinner"></div>
@@ -32,19 +40,90 @@
     </div>
 
     <div class="gallery" id="gallery">
-      <div class="loading">加载中...</div>
+      <div class="loading">
+        <div class="spinner"></div>
+        <p>加载中...</p>
+      </div>
     </div>
   </div>
 
+  <!-- 图片预览 Modal -->
   <div class="image-modal" id="imageModal">
+    <div class="modal-overlay"></div>
     <div class="modal-content">
-      <button class="modal-close" id="modalClose">&times;</button>
+      <button class="modal-close" id="modalClose">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
       <img id="modalImage" src="" alt="">
       <div class="modal-actions">
-        <button class="modal-btn copy-btn" id="copyBtn">📋 复制</button>
-        <button class="modal-btn download-btn" id="downloadBtn">⬇️ 下载</button>
-        <button class="modal-btn delete-btn" id="deleteBtn">🗑️ 删除</button>
+        <button class="modal-btn" id="editBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          编辑
+        </button>
+        <button class="modal-btn" id="copyBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          复制
+        </button>
+        <button class="modal-btn" id="downloadBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          下载
+        </button>
+        <button class="modal-btn btn-danger" id="deleteBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          删除
+        </button>
       </div>
+    </div>
+  </div>
+
+  <!-- 图片编辑器 Modal -->
+  <div class="editor-modal" id="editorModal">
+    <div class="editor-toolbar">
+      <div class="toolbar-group">
+        <button class="tool-btn active" data-tool="arrow" title="箭头">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+        <button class="tool-btn" data-tool="text" title="文本">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 7 4 4 20 4 20 7"></polyline>
+            <line x1="9" y1="20" x2="15" y2="20"></line>
+            <line x1="12" y1="4" x2="12" y2="20"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="toolbar-group color-group">
+        <button class="color-btn active" data-color="#ef4444" style="background:#ef4444" title="红色"></button>
+        <button class="color-btn" data-color="#3b82f6" style="background:#3b82f6" title="蓝色"></button>
+        <button class="color-btn" data-color="#22c55e" style="background:#22c55e" title="绿色"></button>
+        <button class="color-btn" data-color="#facc15" style="background:#facc15" title="黄色"></button>
+        <button class="color-btn" data-color="#ffffff" style="background:#ffffff; border:1px solid #666" title="白色"></button>
+        <button class="color-btn" data-color="#000000" style="background:#000000" title="黑色"></button>
+      </div>
+      <div class="toolbar-group">
+        <button class="tool-btn" id="editorUndo" title="撤销">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="toolbar-group toolbar-right">
+        <button class="tool-btn" id="editorCancel" title="取消">取消</button>
+        <button class="tool-btn tool-btn-primary" id="editorSave" title="保存">保存</button>
+      </div>
+    </div>
+    <div class="editor-canvas-container" id="editorCanvasContainer">
+      <canvas id="editorCanvas"></canvas>
+    </div>
+    <!-- 文本输入框 -->
+    <div class="text-input-overlay" id="textInputOverlay" style="display:none">
+      <input type="text" id="textInput" placeholder="输入文字，按回车确认" autofocus>
     </div>
   </div>
 
