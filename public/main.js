@@ -31,8 +31,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ========== Event Listeners ==========
 function setupEventListeners() {
-  // Upload area click
+  // Upload area click + keyboard
   uploadArea.addEventListener('click', () => fileInput.click());
+  uploadArea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fileInput.click();
+    }
+  });
 
   // File selection
   fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
@@ -197,7 +203,14 @@ function createImageCard(file) {
 
   card.appendChild(img);
   card.appendChild(info);
-  card.addEventListener('click', () => openModal(file));
+
+  // Prevent click from firing after drag
+  let wasDragged = false;
+  card.addEventListener('dragstart', () => { wasDragged = true; });
+  card.addEventListener('click', () => {
+    if (wasDragged) { wasDragged = false; return; }
+    openModal(file);
+  });
   return card;
 }
 
@@ -278,9 +291,31 @@ function closeModal() {
 
 async function copyImage() {
   try {
+    // Clipboard API only supports image/png — convert all formats via canvas
     const response = await fetch(currentImageData.path);
     const blob = await response.blob();
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(blob);
+    const pngBlob = await new Promise((resolve, reject) => {
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(objectUrl);
+        canvas.toBlob((b) => {
+          if (b) resolve(b);
+          else reject(new Error('转换 PNG 失败'));
+        }, 'image/png');
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('加载图片失败'));
+      };
+      img.src = objectUrl;
+    });
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
     showToast('图片已复制到剪贴板', 'success');
   } catch (error) {
     console.error('复制失败:', error);
