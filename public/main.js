@@ -528,30 +528,41 @@ function editorUndoAction() {
 
 function openEditor() {
   if (!currentImageData) return;
+  const imageUrl = currentImageData.path;
   closeModal();
   editorModal.classList.add('active');
   document.body.style.overflow = 'hidden';
   editorState.history = [];
 
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.onload = () => {
-    editorState.baseImage = img;
-    const canvas = editorCanvas;
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
+  // Fetch image as blob to avoid CORS canvas tainting
+  fetch(imageUrl)
+    .then(res => res.blob())
+    .then(blob => {
+      const objectUrl = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        editorState.baseImage = img;
+        const canvas = editorCanvas;
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
 
-    // Fit canvas in container
-    const container = editorCanvasContainer;
-    const maxW = container.clientWidth - 32;
-    const maxH = container.clientHeight - 32;
-    const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
-    canvas.style.width = (img.naturalWidth * scale) + 'px';
-    canvas.style.height = (img.naturalHeight * scale) + 'px';
-  };
-  img.src = currentImageData.path;
+        // Fit canvas in container
+        const container = editorCanvasContainer;
+        const maxW = container.clientWidth - 32;
+        const maxH = container.clientHeight - 32;
+        const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+        canvas.style.width = (img.naturalWidth * scale) + 'px';
+        canvas.style.height = (img.naturalHeight * scale) + 'px';
+        URL.revokeObjectURL(objectUrl);
+      };
+      img.src = objectUrl;
+    })
+    .catch(() => {
+      showToast('加载图片失败', 'error');
+      closeEditor();
+    });
 }
 
 function closeEditor() {
