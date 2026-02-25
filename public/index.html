@@ -85,6 +85,7 @@
   <!-- 图片编辑器 Modal -->
   <div class="editor-modal" id="editorModal" role="dialog" aria-label="图片编辑器">
     <div class="editor-toolbar">
+      <!-- Tools -->
       <div class="toolbar-group">
         <button class="tool-btn active" data-tool="arrow" title="箭头" aria-label="箭头工具">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -100,6 +101,31 @@
           </svg>
         </button>
       </div>
+      <!-- Thickness (for arrow) -->
+      <div class="toolbar-group size-group" id="thicknessGroup">
+        <button class="size-btn" data-size="0" title="细" aria-label="细线条">
+          <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+        <button class="size-btn active" data-size="1" title="中" aria-label="中等线条">
+          <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+        </button>
+        <button class="size-btn" data-size="2" title="粗" aria-label="粗线条">
+          <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <!-- Font size (for text) -->
+      <div class="toolbar-group size-group" id="fontSizeGroup" style="display:none">
+        <button class="size-btn" data-fontsize="0" title="小号字" aria-label="小号字">
+          <span style="font-size:11px;font-weight:600">A</span>
+        </button>
+        <button class="size-btn active" data-fontsize="1" title="中号字" aria-label="中号字">
+          <span style="font-size:14px;font-weight:600">A</span>
+        </button>
+        <button class="size-btn" data-fontsize="2" title="大号字" aria-label="大号字">
+          <span style="font-size:18px;font-weight:700">A</span>
+        </button>
+      </div>
+      <!-- Colors -->
       <div class="toolbar-group color-group">
         <button class="color-btn active" data-color="#ef4444" style="background:#ef4444" title="红色" aria-label="红色"></button>
         <button class="color-btn" data-color="#0D9488" style="background:#0D9488" title="青色" aria-label="青色"></button>
@@ -108,6 +134,7 @@
         <button class="color-btn" data-color="#ffffff" style="background:#ffffff; border:1px solid #555" title="白色" aria-label="白色"></button>
         <button class="color-btn" data-color="#134E4A" style="background:#134E4A" title="深色" aria-label="深色"></button>
       </div>
+      <!-- Undo -->
       <div class="toolbar-group">
         <button class="tool-btn" id="editorUndo" title="撤销" aria-label="撤销">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -116,6 +143,7 @@
           </svg>
         </button>
       </div>
+      <!-- Actions -->
       <div class="toolbar-group toolbar-right">
         <button class="tool-btn" id="editorCancel" title="取消">取消</button>
         <button class="tool-btn tool-btn-primary" id="editorSave" title="保存">保存</button>

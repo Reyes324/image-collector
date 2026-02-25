@@ -534,6 +534,35 @@ header h1 {
   background: var(--cta-hover) !important;
 }
 
+.size-group {
+  gap: 2px;
+}
+
+.size-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  color: #94A3B8;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.size-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #F1F5F9;
+}
+
+.size-btn.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
 .color-group {
   gap: 5px;
 }

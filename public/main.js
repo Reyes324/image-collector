@@ -352,25 +352,60 @@ async function deleteImage() {
   }
 }
 
-// ========== Image Editor ==========
+// ========== Image Editor (Object-based) ==========
+const THICKNESS = [4, 8, 14];        // Arrow line widths: thin, medium, thick
+const FONT_SIZES = [0.025, 0.04, 0.065]; // Relative to canvas width
+const HIT_TOLERANCE = 18;            // px tolerance for clicking annotations
+
 let editorState = {
-  tool: 'arrow',     // 'arrow' | 'text'
+  tool: 'arrow',
   color: '#ef4444',
+  thickness: 1,       // index into THICKNESS
+  fontSize: 1,        // index into FONT_SIZES
+  annotations: [],    // {id, type, ...props}
+  selectedId: null,
+  dragging: false,
   drawing: false,
+  dragOffsetX: 0,
+  dragOffsetY: 0,
   startX: 0,
   startY: 0,
-  history: [],       // Array of ImageData snapshots
-  baseImage: null,   // Original HTMLImageElement
+  baseImage: null,
+  nextId: 1,
 };
 
 function setupEditor() {
+  const thicknessGroup = document.getElementById('thicknessGroup');
+  const fontSizeGroup = document.getElementById('fontSizeGroup');
+
   // Tool selection
   document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       editorState.tool = btn.dataset.tool;
-      editorCanvas.style.cursor = editorState.tool === 'text' ? 'text' : 'crosshair';
+      editorState.selectedId = null;
+      thicknessGroup.style.display = editorState.tool === 'arrow' ? '' : 'none';
+      fontSizeGroup.style.display = editorState.tool === 'text' ? '' : 'none';
+      redrawCanvas();
+    });
+  });
+
+  // Thickness selection
+  thicknessGroup.querySelectorAll('.size-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      thicknessGroup.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      editorState.thickness = parseInt(btn.dataset.size);
+    });
+  });
+
+  // Font size selection
+  fontSizeGroup.querySelectorAll('.size-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      fontSizeGroup.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      editorState.fontSize = parseInt(btn.dataset.fontsize);
     });
   });
 
@@ -383,127 +418,275 @@ function setupEditor() {
     });
   });
 
-  // Undo
   editorUndo.addEventListener('click', editorUndoAction);
-
-  // Save
   editorSave.addEventListener('click', saveEditedImage);
-
-  // Cancel
   editorCancel.addEventListener('click', closeEditor);
 
-  // Canvas events
+  // Canvas mouse events
   editorCanvas.addEventListener('mousedown', onCanvasMouseDown);
   editorCanvas.addEventListener('mousemove', onCanvasMouseMove);
   editorCanvas.addEventListener('mouseup', onCanvasMouseUp);
 
   // Touch support
-  editorCanvas.addEventListener('touchstart', onCanvasTouchStart, { passive: false });
-  editorCanvas.addEventListener('touchmove', onCanvasTouchMove, { passive: false });
-  editorCanvas.addEventListener('touchend', onCanvasTouchEnd);
+  editorCanvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.touches[0];
+    onCanvasMouseDown({ clientX: t.clientX, clientY: t.clientY });
+  }, { passive: false });
+  editorCanvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const t = e.touches[0];
+    onCanvasMouseMove({ clientX: t.clientX, clientY: t.clientY });
+  }, { passive: false });
+  editorCanvas.addEventListener('touchend', (e) => {
+    const t = e.changedTouches[0];
+    onCanvasMouseUp({ clientX: t.clientX, clientY: t.clientY });
+  });
 
   // Text input
   textInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      commitText();
-    } else if (e.key === 'Escape') {
-      textInputOverlay.style.display = 'none';
-    }
+    if (e.key === 'Enter') commitText();
+    else if (e.key === 'Escape') textInputOverlay.style.display = 'none';
   });
 }
 
+// --- Coordinate helpers ---
 function getCanvasPos(e) {
   const rect = editorCanvas.getBoundingClientRect();
-  const scaleX = editorCanvas.width / rect.width;
-  const scaleY = editorCanvas.height / rect.height;
   return {
-    x: (e.clientX - rect.left) * scaleX,
-    y: (e.clientY - rect.top) * scaleY
+    x: (e.clientX - rect.left) * (editorCanvas.width / rect.width),
+    y: (e.clientY - rect.top) * (editorCanvas.height / rect.height)
   };
 }
 
+function getScreenScale() {
+  const rect = editorCanvas.getBoundingClientRect();
+  return editorCanvas.width / rect.width;
+}
+
+// --- Hit detection ---
+function hitTest(pos) {
+  const tol = HIT_TOLERANCE * getScreenScale();
+  // Test in reverse order (top-most first)
+  for (let i = editorState.annotations.length - 1; i >= 0; i--) {
+    const ann = editorState.annotations[i];
+    if (ann.type === 'arrow') {
+      if (distToSegment(pos, ann.fromX, ann.fromY, ann.toX, ann.toY) < tol + ann.thickness * 2) {
+        return ann;
+      }
+    } else if (ann.type === 'text') {
+      const ctx = editorCanvas.getContext('2d');
+      const fs = getAbsFontSize(ann.fontSizeIdx);
+      ctx.font = `bold ${fs}px "Plus Jakarta Sans", sans-serif`;
+      const w = ctx.measureText(ann.text).width;
+      if (pos.x >= ann.x - 4 && pos.x <= ann.x + w + 4 &&
+          pos.y >= ann.y - 4 && pos.y <= ann.y + fs + 4) {
+        return ann;
+      }
+    }
+  }
+  return null;
+}
+
+function distToSegment(p, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(p.x - x1, p.y - y1);
+  let t = ((p.x - x1) * dx + (p.y - y1) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (x1 + t * dx), p.y - (y1 + t * dy));
+}
+
+function getAbsFontSize(idx) {
+  return Math.max(18, Math.round(editorCanvas.width * FONT_SIZES[idx]));
+}
+
+// --- Canvas events ---
 function onCanvasMouseDown(e) {
   const pos = getCanvasPos(e);
-  if (editorState.tool === 'text') {
-    showTextInput(e.clientX, e.clientY, pos.x, pos.y);
+  textInputOverlay.style.display = 'none';
+
+  // 1. Try to grab an existing annotation
+  const hit = hitTest(pos);
+  if (hit) {
+    editorState.selectedId = hit.id;
+    editorState.dragging = true;
+    editorState.dragOffsetX = pos.x;
+    editorState.dragOffsetY = pos.y;
+    editorCanvas.style.cursor = 'move';
+    redrawCanvas();
     return;
   }
-  // Arrow tool
+
+  // 2. Deselect
+  editorState.selectedId = null;
+
+  // 3. Tool action
+  if (editorState.tool === 'text') {
+    showTextInput(e.clientX, e.clientY, pos.x, pos.y);
+    redrawCanvas();
+    return;
+  }
+
+  // Arrow: start drawing
   editorState.drawing = true;
   editorState.startX = pos.x;
   editorState.startY = pos.y;
-  // Save current state for preview restoration
-  const ctx = editorCanvas.getContext('2d');
-  editorState.previewSnapshot = ctx.getImageData(0, 0, editorCanvas.width, editorCanvas.height);
+  redrawCanvas();
 }
 
 function onCanvasMouseMove(e) {
-  if (!editorState.drawing) return;
-  const ctx = editorCanvas.getContext('2d');
   const pos = getCanvasPos(e);
-  // Restore before drawing preview
-  ctx.putImageData(editorState.previewSnapshot, 0, 0);
-  drawArrow(ctx, editorState.startX, editorState.startY, pos.x, pos.y, editorState.color);
+
+  if (editorState.dragging) {
+    const dx = pos.x - editorState.dragOffsetX;
+    const dy = pos.y - editorState.dragOffsetY;
+    const ann = editorState.annotations.find(a => a.id === editorState.selectedId);
+    if (ann) {
+      if (ann.type === 'arrow') {
+        ann.fromX += dx; ann.fromY += dy;
+        ann.toX += dx; ann.toY += dy;
+      } else if (ann.type === 'text') {
+        ann.x += dx; ann.y += dy;
+      }
+      editorState.dragOffsetX = pos.x;
+      editorState.dragOffsetY = pos.y;
+      redrawCanvas();
+    }
+    return;
+  }
+
+  if (editorState.drawing) {
+    // Arrow preview
+    redrawCanvas();
+    const ctx = editorCanvas.getContext('2d');
+    drawArrow(ctx, editorState.startX, editorState.startY, pos.x, pos.y,
+      editorState.color, THICKNESS[editorState.thickness]);
+    return;
+  }
+
+  // Hover cursor
+  const hit = hitTest(pos);
+  editorCanvas.style.cursor = hit ? 'move' :
+    (editorState.tool === 'text' ? 'text' : 'crosshair');
 }
 
 function onCanvasMouseUp(e) {
-  if (!editorState.drawing) return;
-  editorState.drawing = false;
+  if (editorState.dragging) {
+    editorState.dragging = false;
+    editorCanvas.style.cursor = 'crosshair';
+    return;
+  }
+
+  if (editorState.drawing) {
+    editorState.drawing = false;
+    const pos = getCanvasPos(e);
+    const dist = Math.hypot(pos.x - editorState.startX, pos.y - editorState.startY);
+    if (dist > 8) {
+      editorState.annotations.push({
+        id: editorState.nextId++,
+        type: 'arrow',
+        fromX: editorState.startX, fromY: editorState.startY,
+        toX: pos.x, toY: pos.y,
+        color: editorState.color,
+        thickness: THICKNESS[editorState.thickness],
+      });
+    }
+    redrawCanvas();
+  }
+}
+
+// --- Drawing ---
+function redrawCanvas() {
   const ctx = editorCanvas.getContext('2d');
-  const pos = getCanvasPos(e);
-  // Restore clean state
-  ctx.putImageData(editorState.previewSnapshot, 0, 0);
-  // Save history before drawing
-  pushHistory();
-  drawArrow(ctx, editorState.startX, editorState.startY, pos.x, pos.y, editorState.color);
+  ctx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
+  if (editorState.baseImage) {
+    ctx.drawImage(editorState.baseImage, 0, 0);
+  }
+  for (const ann of editorState.annotations) {
+    if (ann.type === 'arrow') {
+      drawArrow(ctx, ann.fromX, ann.fromY, ann.toX, ann.toY, ann.color, ann.thickness);
+    } else if (ann.type === 'text') {
+      drawText(ctx, ann);
+    }
+    // Selection highlight
+    if (ann.id === editorState.selectedId) {
+      drawSelectionBox(ctx, ann);
+    }
+  }
 }
 
-// Touch support
-function onCanvasTouchStart(e) {
-  e.preventDefault();
-  const touch = e.touches[0];
-  onCanvasMouseDown({ clientX: touch.clientX, clientY: touch.clientY });
-}
-
-function onCanvasTouchMove(e) {
-  e.preventDefault();
-  const touch = e.touches[0];
-  onCanvasMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
-}
-
-function onCanvasTouchEnd(e) {
-  const touch = e.changedTouches[0];
-  onCanvasMouseUp({ clientX: touch.clientX, clientY: touch.clientY });
-}
-
-function drawArrow(ctx, fromX, fromY, toX, toY, color) {
-  const headLen = Math.max(16, Math.hypot(toX - fromX, toY - fromY) * 0.08);
+function drawArrow(ctx, fromX, fromY, toX, toY, color, lineW) {
+  const len = Math.hypot(toX - fromX, toY - fromY);
+  const headLen = Math.max(lineW * 3, len * 0.15);
+  const headWidth = headLen * 0.7;
   const angle = Math.atan2(toY - fromY, toX - fromX);
+
+  // Shorten body so it doesn't poke through the arrowhead
+  const bodyEndX = toX - headLen * 0.7 * Math.cos(angle);
+  const bodyEndY = toY - headLen * 0.7 * Math.sin(angle);
 
   ctx.save();
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = lineW;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  // Line
+  // Body
   ctx.beginPath();
   ctx.moveTo(fromX, fromY);
-  ctx.lineTo(toX, toY);
+  ctx.lineTo(bodyEndX, bodyEndY);
   ctx.stroke();
 
-  // Arrowhead
+  // Arrowhead (triangle)
   ctx.beginPath();
   ctx.moveTo(toX, toY);
-  ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI / 6), toY - headLen * Math.sin(angle - Math.PI / 6));
-  ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI / 6), toY - headLen * Math.sin(angle + Math.PI / 6));
+  ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI / 7), toY - headLen * Math.sin(angle - Math.PI / 7));
+  ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI / 7), toY - headLen * Math.sin(angle + Math.PI / 7));
   ctx.closePath();
   ctx.fill();
 
   ctx.restore();
 }
 
+function drawText(ctx, ann) {
+  const fs = getAbsFontSize(ann.fontSizeIdx);
+  ctx.save();
+  ctx.font = `bold ${fs}px "Plus Jakarta Sans", -apple-system, sans-serif`;
+  ctx.fillStyle = ann.color;
+  ctx.textBaseline = 'top';
+  ctx.shadowColor = 'rgba(0,0,0,0.4)';
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetX = 1;
+  ctx.shadowOffsetY = 1;
+  ctx.fillText(ann.text, ann.x, ann.y);
+  ctx.restore();
+}
+
+function drawSelectionBox(ctx, ann) {
+  let x, y, w, h;
+  if (ann.type === 'arrow') {
+    x = Math.min(ann.fromX, ann.toX) - 6;
+    y = Math.min(ann.fromY, ann.toY) - 6;
+    w = Math.abs(ann.toX - ann.fromX) + 12;
+    h = Math.abs(ann.toY - ann.fromY) + 12;
+  } else {
+    const fs = getAbsFontSize(ann.fontSizeIdx);
+    ctx.font = `bold ${fs}px "Plus Jakarta Sans", sans-serif`;
+    const tw = ctx.measureText(ann.text).width;
+    x = ann.x - 4; y = ann.y - 4;
+    w = tw + 8; h = fs + 8;
+  }
+  ctx.save();
+  ctx.strokeStyle = '#0D9488';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(x, y, w, h);
+  ctx.restore();
+}
+
+// --- Text input ---
 function showTextInput(screenX, screenY, canvasX, canvasY) {
   const containerRect = editorCanvasContainer.getBoundingClientRect();
   textInputOverlay.style.display = 'block';
@@ -517,48 +700,29 @@ function showTextInput(screenX, screenY, canvasX, canvasY) {
 
 function commitText() {
   const text = textInput.value.trim();
-  if (!text) {
-    textInputOverlay.style.display = 'none';
-    return;
-  }
-  const cx = parseFloat(textInput.dataset.canvasX);
-  const cy = parseFloat(textInput.dataset.canvasY);
-  const ctx = editorCanvas.getContext('2d');
-
-  pushHistory();
-
-  const fontSize = Math.max(20, Math.round(editorCanvas.width / 40));
-  ctx.save();
-  ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-  ctx.fillStyle = editorState.color;
-  ctx.textBaseline = 'top';
-
-  // Text shadow for readability
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur = 4;
-  ctx.shadowOffsetX = 1;
-  ctx.shadowOffsetY = 1;
-  ctx.fillText(text, cx, cy);
-  ctx.restore();
-
   textInputOverlay.style.display = 'none';
+  if (!text) return;
+  editorState.annotations.push({
+    id: editorState.nextId++,
+    type: 'text',
+    x: parseFloat(textInput.dataset.canvasX),
+    y: parseFloat(textInput.dataset.canvasY),
+    text,
+    color: editorState.color,
+    fontSizeIdx: editorState.fontSize,
+  });
+  redrawCanvas();
 }
 
-function pushHistory() {
-  const ctx = editorCanvas.getContext('2d');
-  editorState.history.push(ctx.getImageData(0, 0, editorCanvas.width, editorCanvas.height));
-  // Limit history to 30 steps
-  if (editorState.history.length > 30) editorState.history.shift();
-}
-
+// --- Undo / Open / Close / Save ---
 function editorUndoAction() {
-  if (editorState.history.length === 0) {
+  if (editorState.annotations.length === 0) {
     showToast('没有可撤销的操作', 'info');
     return;
   }
-  const ctx = editorCanvas.getContext('2d');
-  const prev = editorState.history.pop();
-  ctx.putImageData(prev, 0, 0);
+  editorState.annotations.pop();
+  editorState.selectedId = null;
+  redrawCanvas();
 }
 
 function openEditor() {
@@ -567,9 +731,10 @@ function openEditor() {
   closeModal();
   editorModal.classList.add('active');
   document.body.style.overflow = 'hidden';
-  editorState.history = [];
+  editorState.annotations = [];
+  editorState.selectedId = null;
+  editorState.nextId = 1;
 
-  // Fetch image as blob to avoid CORS canvas tainting
   fetch(imageUrl)
     .then(res => res.blob())
     .then(blob => {
@@ -577,19 +742,17 @@ function openEditor() {
       const img = new Image();
       img.onload = () => {
         editorState.baseImage = img;
-        const canvas = editorCanvas;
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        editorCanvas.width = img.naturalWidth;
+        editorCanvas.height = img.naturalHeight;
 
-        // Fit canvas in container
         const container = editorCanvasContainer;
         const maxW = container.clientWidth - 32;
         const maxH = container.clientHeight - 32;
         const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
-        canvas.style.width = (img.naturalWidth * scale) + 'px';
-        canvas.style.height = (img.naturalHeight * scale) + 'px';
+        editorCanvas.style.width = (img.naturalWidth * scale) + 'px';
+        editorCanvas.style.height = (img.naturalHeight * scale) + 'px';
+
+        redrawCanvas();
         URL.revokeObjectURL(objectUrl);
       };
       img.src = objectUrl;
@@ -605,14 +768,15 @@ function closeEditor() {
   document.body.style.overflow = '';
   textInputOverlay.style.display = 'none';
   editorState.drawing = false;
+  editorState.dragging = false;
 }
 
 async function saveEditedImage() {
   try {
+    editorState.selectedId = null;
+    redrawCanvas(); // remove selection box before export
     showToast('保存中...', 'info');
-    const blob = await new Promise(resolve => {
-      editorCanvas.toBlob(resolve, 'image/png');
-    });
+    const blob = await new Promise(resolve => editorCanvas.toBlob(resolve, 'image/png'));
     const file = new File([blob], `edited_${Date.now()}.png`, { type: 'image/png' });
     const formData = new FormData();
     formData.append('image', file);
