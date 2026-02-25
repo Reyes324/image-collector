@@ -504,7 +504,11 @@ function getAbsFontSize(idx) {
 // --- Canvas events ---
 function onCanvasMouseDown(e) {
   const pos = getCanvasPos(e);
-  textInputOverlay.style.display = 'none';
+
+  // If text input is open, commit it first
+  if (textInputOverlay.style.display !== 'none') {
+    commitText();
+  }
 
   // 1. Try to grab an existing annotation
   const hit = hitTest(pos);
@@ -656,10 +660,6 @@ function drawText(ctx, ann) {
   ctx.font = `bold ${fs}px "Plus Jakarta Sans", -apple-system, sans-serif`;
   ctx.fillStyle = ann.color;
   ctx.textBaseline = 'top';
-  ctx.shadowColor = 'rgba(0,0,0,0.4)';
-  ctx.shadowBlur = 3;
-  ctx.shadowOffsetX = 1;
-  ctx.shadowOffsetY = 1;
   ctx.fillText(ann.text, ann.x, ann.y);
   ctx.restore();
 }
