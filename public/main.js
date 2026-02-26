@@ -675,6 +675,8 @@ let editorState = {
   drawing: false,
   dragOffsetX: 0,
   dragOffsetY: 0,
+  dragMoved: false,         // true once drag exceeds click threshold
+  pendingTextEdit: null,    // annotation to edit on mouseup if no drag occurred
   startX: 0,
   startY: 0,
   baseImage: null,
@@ -839,15 +841,24 @@ function onCanvasMouseDown(e) {
   const hit = hitTest(pos);
 
   if (editorState.tool === 'text') {
-    // Text tool: single click on existing text → edit it
+    // Text tool: click on existing text → prepare for drag OR edit (decided on mouseup)
     if (hit && hit.type === 'text') {
-      openTextEditMode(hit);
+      editorState.selectedId = hit.id;
+      editorState.pendingTextEdit = hit;
+      editorState.dragging = true;
+      editorState.dragMoved = false;
+      editorState.dragOffsetX = pos.x;
+      editorState.dragOffsetY = pos.y;
+      editorCanvas.style.cursor = 'move';
+      redrawCanvas();
       return;
     }
     // Click on arrow annotation → select/drag
     if (hit) {
       editorState.selectedId = hit.id;
+      editorState.pendingTextEdit = null;
       editorState.dragging = true;
+      editorState.dragMoved = false;
       editorState.dragOffsetX = pos.x;
       editorState.dragOffsetY = pos.y;
       editorCanvas.style.cursor = 'move';
@@ -886,6 +897,16 @@ function onCanvasMouseMove(e) {
   if (editorState.dragging) {
     const dx = pos.x - editorState.dragOffsetX;
     const dy = pos.y - editorState.dragOffsetY;
+
+    // If pending text edit, require movement beyond threshold before committing to drag
+    if (editorState.pendingTextEdit && !editorState.dragMoved) {
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+        editorState.dragMoved = true;
+      } else {
+        return; // Don't move yet — might be a click (will open editor on mouseup)
+      }
+    }
+
     const ann = editorState.annotations.find(a => a.id === editorState.selectedId);
     if (ann) {
       if (ann.type === 'arrow') {
@@ -919,7 +940,14 @@ function onCanvasMouseMove(e) {
 function onCanvasMouseUp(e) {
   if (editorState.dragging) {
     editorState.dragging = false;
-    editorCanvas.style.cursor = 'crosshair';
+    editorCanvas.style.cursor = editorState.tool === 'text' ? 'text' : 'crosshair';
+
+    // If we didn't move beyond threshold, it was a click → enter edit mode
+    if (editorState.pendingTextEdit && !editorState.dragMoved) {
+      openTextEditMode(editorState.pendingTextEdit);
+    }
+    editorState.pendingTextEdit = null;
+    editorState.dragMoved = false;
     return;
   }
 
@@ -1038,13 +1066,15 @@ function showTextInput(canvasX, canvasY) {
   // Convert canvas coords to viewport coords (overlay is inside position:fixed editor-modal at 0,0)
   const viewportX = canvasX / screenScale + canvasRect.left;
   const viewportY = canvasY / screenScale + canvasRect.top;
+  // Compensate for line-height half-leading: textarea line-height:1.2 adds 0.1*fs space above text
+  const halfLeading = screenFontSize * 0.1;
 
   editorState.editingAnnotationId = null;
 
   textInputOverlay.style.display = 'block';
-  // Offset by border(2px) + padding(4px left, 2px top) so text content aligns with canvas position
-  textInputOverlay.style.left = (viewportX - 6) + 'px';
-  textInputOverlay.style.top = (viewportY - 4) + 'px';
+  // No border/padding on textarea, so position directly at text origin minus half-leading
+  textInputOverlay.style.left = viewportX + 'px';
+  textInputOverlay.style.top = (viewportY - halfLeading) + 'px';
 
   textInput.style.color = editorState.color;
   textInput.style.fontSize = screenFontSize + 'px';
@@ -1056,9 +1086,10 @@ function showTextInput(canvasX, canvasY) {
 
   // Initial size ~1 character
   textInput.style.width = screenFontSize + 'px';
-  textInput.style.height = (screenFontSize * 1.4) + 'px';
+  textInput.style.height = (screenFontSize * 1.2) + 'px';
 
-  textInput.focus();
+  // Focus after layout so cursor appears immediately
+  requestAnimationFrame(() => textInput.focus());
 }
 
 function openTextEditMode(ann) {
@@ -1090,10 +1121,11 @@ function openTextEditMode(ann) {
   // Convert canvas coords to viewport coords (overlay is inside position:fixed editor-modal at 0,0)
   const viewportX = ann.x / screenScale + canvasRect.left;
   const viewportY = ann.y / screenScale + canvasRect.top;
+  const halfLeading = screenFontSize * 0.1;
 
   textInputOverlay.style.display = 'block';
-  textInputOverlay.style.left = (viewportX - 6) + 'px';
-  textInputOverlay.style.top = (viewportY - 4) + 'px';
+  textInputOverlay.style.left = viewportX + 'px';
+  textInputOverlay.style.top = (viewportY - halfLeading) + 'px';
 
   textInput.style.color = ann.color;
   textInput.style.fontSize = screenFontSize + 'px';
@@ -1103,9 +1135,13 @@ function openTextEditMode(ann) {
   textInput.dataset.canvasX = ann.x;
   textInput.dataset.canvasY = ann.y;
 
-  textInput.focus();
   autoResizeTextInput();
   redrawCanvas();
+  // Focus after layout so cursor appears immediately
+  requestAnimationFrame(() => {
+    textInput.focus();
+    textInput.setSelectionRange(textInput.value.length, textInput.value.length);
+  });
 }
 
 function autoResizeTextInput() {
@@ -1122,7 +1158,7 @@ function autoResizeTextInput() {
     maxWidth = Math.max(maxWidth, measureCtx.measureText(line).width);
   }
 
-  textInput.style.width = (maxWidth + screenFontSize * 0.6) + 'px';
+  textInput.style.width = (maxWidth + screenFontSize * 0.5) + 'px';
   textInput.style.height = 'auto';
   textInput.style.height = textInput.scrollHeight + 'px';
 }
@@ -1180,6 +1216,8 @@ function openEditor() {
   document.body.style.overflow = 'hidden';
   editorState.annotations = [];
   editorState.selectedId = null;
+  editorState.pendingTextEdit = null;
+  editorState.dragMoved = false;
   editorState.nextId = 1;
 
   fetch(imageUrl)

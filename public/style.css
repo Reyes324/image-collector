@@ -784,14 +784,15 @@ header h1 {
 
 .text-input-overlay textarea {
   background: transparent;
-  border: 2px solid #3b82f6;
-  border-radius: 3px;
-  padding: 2px 4px;
+  border: none;
+  padding: 0;
   margin: 0;
   outline: none;
+  box-shadow: 0 0 0 2px #3b82f6;
+  border-radius: 2px;
   font-weight: bold;
   min-width: 1.2em;
-  min-height: 1.4em;
+  min-height: 1.2em;
   resize: none;
   overflow: hidden;
   white-space: pre;
