@@ -519,27 +519,7 @@ async function copyImageByPath(path) {
   try {
     const response = await fetch(path);
     const blob = await response.blob();
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(blob);
-    const pngBlob = await new Promise((resolve, reject) => {
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        URL.revokeObjectURL(objectUrl);
-        canvas.toBlob((b) => {
-          if (b) resolve(b);
-          else reject(new Error('转换 PNG 失败'));
-        }, 'image/png');
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error('加载图片失败'));
-      };
-      img.src = objectUrl;
-    });
+    const pngBlob = blob.type === 'image/png' ? blob : await convertToPng(blob);
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
     showToast('图片已复制到剪贴板', 'success');
   } catch (error) {
@@ -628,21 +608,8 @@ async function batchCopy() {
     try {
       const response = await fetch(file.path);
       const blob = await response.blob();
-      // Convert to PNG for clipboard compatibility
-      const pngBlob = await new Promise((resolve, reject) => {
-        const img = new Image();
-        const objectUrl = URL.createObjectURL(blob);
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          canvas.getContext('2d').drawImage(img, 0, 0);
-          URL.revokeObjectURL(objectUrl);
-          canvas.toBlob(b => b ? resolve(b) : reject(new Error('转换失败')), 'image/png');
-        };
-        img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('加载失败')); };
-        img.src = objectUrl;
-      });
+      // 剪贴板 API 只接受 image/png，原图若已是 PNG 则直接用
+      const pngBlob = blob.type === 'image/png' ? blob : await convertToPng(blob);
       items.push(new ClipboardItem({ 'image/png': pngBlob }));
     } catch (err) {
       console.error('处理图片失败:', filename, err);
@@ -662,7 +629,7 @@ async function batchCopy() {
     if (items.length > 1) {
       try {
         await navigator.clipboard.write([items[0]]);
-        showToast(`浏览器限制，仅复制了第 1 张图片`, 'info');
+        showToast('浏览器限制，仅复制了第 1 张', 'info');
       } catch (err2) {
         showToast('复制失败', 'error');
       }
@@ -670,6 +637,24 @@ async function batchCopy() {
       showToast('复制失败', 'error');
     }
   }
+}
+
+// 非 PNG 格式转 PNG（剪贴板 API 要求）
+function convertToPng(blob) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => b ? resolve(b) : reject(new Error('转换失败')), 'image/png');
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('加载失败')); };
+    img.src = url;
+  });
 }
 
 async function batchDelete() {
