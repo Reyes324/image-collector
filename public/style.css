@@ -492,101 +492,114 @@ header h1 {
   background: #FEE2E2;
 }
 
-/* ========== Image Modal ========== */
-.image-modal {
+/* ========== Shared Modal Overlay ========== */
+.image-modal,
+.editor-modal {
   display: none;
   position: fixed;
   inset: 0;
-  z-index: 1000;
-}
-
-.image-modal.active {
-  display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(28, 25, 23, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.image-modal { z-index: 1000; }
+.editor-modal { z-index: 2000; }
+
+.image-modal.active,
+.editor-modal.active {
+  display: flex;
 }
 
 .modal-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(28, 25, 23, 0.75);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
-.modal-content {
+/* ========== Shared Modal Card ========== */
+@keyframes modalCardIn {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-card,
+.editor-inner {
   position: relative;
   z-index: 1;
-  max-width: 90vw;
-  max-height: 90vh;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  animation: modalIn 0.2s ease;
+  width: 90vw;
+  max-width: 960px;
+  max-height: 85vh;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18), 0 8px 24px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  animation: modalCardIn 0.2s ease;
 }
 
-@keyframes modalIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+.editor-inner {
+  height: 80vh;
 }
 
-.modal-close {
-  position: absolute;
-  top: -40px;
-  right: 0;
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  color: white;
-  cursor: pointer;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+/* ========== Image Preview Modal ========== */
+.modal-image-area {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background var(--transition);
-}
-
-.modal-close:hover {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-.modal-close:focus-visible {
-  outline: 2px solid white;
-  outline-offset: 2px;
+  overflow: hidden;
+  background: #1C1917;
+  min-height: 0;
 }
 
 #modalImage {
   max-width: 100%;
-  max-height: calc(90vh - 72px);
+  max-height: 100%;
   object-fit: contain;
-  border-radius: var(--radius);
+  display: block;
 }
 
 .modal-actions {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin-top: 14px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.modal-actions-left,
+.modal-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .modal-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 8px 14px;
+  gap: 5px;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 7px 14px;
   border-radius: var(--radius);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-family: inherit;
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--transition), transform var(--transition-fast);
+  transition: background var(--transition), color var(--transition), border-color var(--transition), transform var(--transition-fast);
 }
 
 .modal-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--border-light);
+  color: var(--text);
+  border-color: #D6D3D1;
 }
 
 .modal-btn:active {
@@ -594,67 +607,56 @@ header h1 {
 }
 
 .modal-btn.btn-accent {
-  background: rgba(249, 115, 22, 0.35);
-  border-color: rgba(249, 115, 22, 0.5);
-  color: #FED7AA;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
 }
 
 .modal-btn.btn-accent:hover {
-  background: rgba(249, 115, 22, 0.5);
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 .modal-btn.btn-danger {
-  background: rgba(239, 68, 68, 0.25);
-  border-color: rgba(239, 68, 68, 0.35);
-  color: #FCA5A5;
+  color: var(--danger);
+  border-color: #FECACA;
+  background: #FEF2F2;
 }
 
 .modal-btn.btn-danger:hover {
-  background: rgba(239, 68, 68, 0.4);
+  background: #FEE2E2;
+  border-color: #FCA5A5;
+}
+
+.modal-close-btn {
+  color: var(--text-tertiary) !important;
+}
+
+.modal-close-btn:hover {
+  color: var(--text) !important;
 }
 
 @media (max-width: 768px) {
+  .modal-card,
+  .editor-inner {
+    width: 96vw;
+    max-height: 92vh;
+    border-radius: var(--radius);
+  }
   .modal-actions {
     flex-wrap: wrap;
-    justify-content: center;
+  }
+  .modal-actions-left,
+  .modal-actions-right {
+    flex-wrap: wrap;
   }
   .modal-btn {
-    flex: 1;
-    min-width: 72px;
-    justify-content: center;
+    padding: 7px 10px;
+    font-size: 0.75rem;
   }
 }
 
-/* ========== Editor Modal (centered card) ========== */
-.editor-modal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  background: rgba(28, 25, 23, 0.5);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  align-items: center;
-  justify-content: center;
-}
-
-.editor-modal.active {
-  display: flex;
-}
-
-.editor-inner {
-  display: flex;
-  flex-direction: column;
-  width: 90vw;
-  max-width: 960px;
-  height: 80vh;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
-  overflow: hidden;
-  position: relative;
-}
+/* ========== Editor Modal ========== */
 
 .editor-toolbar {
   display: flex;
@@ -681,8 +683,8 @@ header h1 {
   border-right: none;
 }
 
-.toolbar-right {
-  padding-left: 4px;
+.toolbar-last {
+  border-right: none;
 }
 
 .tool-btn {
@@ -719,15 +721,7 @@ header h1 {
   border-color: var(--primary);
 }
 
-.tool-btn-primary {
-  background: var(--primary) !important;
-  color: white !important;
-  border-color: var(--primary) !important;
-}
-
-.tool-btn-primary:hover {
-  background: var(--primary-hover) !important;
-}
+/* tool-btn-primary removed — action buttons now use .modal-btn in bottom bar */
 
 .size-group {
   gap: 2px;
