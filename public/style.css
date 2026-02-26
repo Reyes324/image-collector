@@ -552,7 +552,7 @@ header h1 {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #1C1917;
+  background: var(--bg);
   min-height: 0;
 }
 
@@ -665,8 +665,8 @@ header h1 {
   flex-wrap: wrap;
   gap: 6px;
   padding: 8px 12px;
-  background: #292524;
-  border-bottom: 1px solid #44403C;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
@@ -676,7 +676,7 @@ header h1 {
   align-items: center;
   gap: 4px;
   padding: 0 8px;
-  border-right: 1px solid #44403C;
+  border-right: 1px solid var(--border);
 }
 
 .toolbar-group:last-child {
@@ -696,7 +696,7 @@ header h1 {
   height: 36px;
   padding: 0 10px;
   background: transparent;
-  color: #A8A29E;
+  color: var(--text-secondary);
   border: 1px solid transparent;
   border-radius: var(--radius);
   cursor: pointer;
@@ -707,8 +707,8 @@ header h1 {
 }
 
 .tool-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #F5F5F4;
+  background: var(--border-light);
+  color: var(--text);
 }
 
 .tool-btn:active {
@@ -734,7 +734,7 @@ header h1 {
   width: 32px;
   height: 32px;
   background: transparent;
-  color: #A8A29E;
+  color: var(--text-tertiary);
   border: 1px solid transparent;
   border-radius: 6px;
   cursor: pointer;
@@ -742,14 +742,14 @@ header h1 {
 }
 
 .size-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #F5F5F4;
+  background: var(--border-light);
+  color: var(--text);
 }
 
 .size-btn.active {
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: rgba(249, 115, 22, 0.25);
 }
 
 .color-group {
@@ -770,7 +770,7 @@ header h1 {
 }
 
 .color-btn.active {
-  border-color: white;
+  border-color: var(--text);
   box-shadow: 0 0 0 2px var(--primary);
 }
 
@@ -781,13 +781,18 @@ header h1 {
   justify-content: center;
   overflow: hidden;
   position: relative;
-  background: #1C1917;
+  background: var(--bg);
 }
 
 #editorCanvas {
   max-width: 100%;
   max-height: 100%;
   cursor: crosshair;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+#modalImage {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .text-input-overlay {
