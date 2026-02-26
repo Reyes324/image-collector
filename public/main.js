@@ -774,15 +774,7 @@ function setupEditor() {
   });
   textInput.addEventListener('input', autoResizeTextInput);
 
-  // Double-click canvas to re-edit existing text
-  editorCanvas.addEventListener('dblclick', (e) => {
-    const pos = getCanvasPos(e);
-    const hit = hitTest(pos);
-    if (hit && hit.type === 'text') {
-      editorState.dragging = false;
-      openTextEditMode(hit);
-    }
-  });
+  // (Single click on text enters edit mode — handled in onCanvasMouseDown)
 }
 
 // --- Coordinate helpers ---
@@ -837,13 +829,39 @@ function getAbsFontSize(idx) {
 function onCanvasMouseDown(e) {
   const pos = getCanvasPos(e);
 
-  // If text input is open, commit it first
+  // If text input is open, commit it and STOP — don't do anything else on this click.
+  // User must click again to create a new text or interact with the canvas.
   if (textInputOverlay.style.display !== 'none') {
     commitText();
+    return;
   }
 
-  // 1. Try to grab an existing annotation
   const hit = hitTest(pos);
+
+  if (editorState.tool === 'text') {
+    // Text tool: single click on existing text → edit it
+    if (hit && hit.type === 'text') {
+      openTextEditMode(hit);
+      return;
+    }
+    // Click on arrow annotation → select/drag
+    if (hit) {
+      editorState.selectedId = hit.id;
+      editorState.dragging = true;
+      editorState.dragOffsetX = pos.x;
+      editorState.dragOffsetY = pos.y;
+      editorCanvas.style.cursor = 'move';
+      redrawCanvas();
+      return;
+    }
+    // Click on blank → new text input
+    editorState.selectedId = null;
+    showTextInput(pos.x, pos.y);
+    redrawCanvas();
+    return;
+  }
+
+  // Arrow tool: grab existing annotation
   if (hit) {
     editorState.selectedId = hit.id;
     editorState.dragging = true;
@@ -854,17 +872,8 @@ function onCanvasMouseDown(e) {
     return;
   }
 
-  // 2. Deselect
-  editorState.selectedId = null;
-
-  // 3. Tool action
-  if (editorState.tool === 'text') {
-    showTextInput(e.clientX, e.clientY, pos.x, pos.y);
-    redrawCanvas();
-    return;
-  }
-
   // Arrow: start drawing
+  editorState.selectedId = null;
   editorState.drawing = true;
   editorState.startX = pos.x;
   editorState.startY = pos.y;
@@ -1021,17 +1030,21 @@ function drawSelectionBox(ctx, ann) {
 }
 
 // --- Text input (WYSIWYG fixed) ---
-function showTextInput(screenX, screenY, canvasX, canvasY) {
-  const containerRect = editorCanvasContainer.getBoundingClientRect();
+function showTextInput(canvasX, canvasY) {
+  const canvasRect = editorCanvas.getBoundingClientRect();
   const screenScale = getScreenScale();
   const screenFontSize = parseFloat((getAbsFontSize(editorState.fontSize) / screenScale).toFixed(2));
+
+  // Convert canvas coords to viewport coords (overlay is inside position:fixed editor-modal at 0,0)
+  const viewportX = canvasX / screenScale + canvasRect.left;
+  const viewportY = canvasY / screenScale + canvasRect.top;
 
   editorState.editingAnnotationId = null;
 
   textInputOverlay.style.display = 'block';
-  // Offset by border(2px) + padding(4px left, 2px top) to align text position
-  textInputOverlay.style.left = (screenX - containerRect.left - 6) + 'px';
-  textInputOverlay.style.top = (screenY - containerRect.top - 4) + 'px';
+  // Offset by border(2px) + padding(4px left, 2px top) so text content aligns with canvas position
+  textInputOverlay.style.left = (viewportX - 6) + 'px';
+  textInputOverlay.style.top = (viewportY - 4) + 'px';
 
   textInput.style.color = editorState.color;
   textInput.style.fontSize = screenFontSize + 'px';
@@ -1050,7 +1063,6 @@ function showTextInput(screenX, screenY, canvasX, canvasY) {
 
 function openTextEditMode(ann) {
   const canvasRect = editorCanvas.getBoundingClientRect();
-  const containerRect = editorCanvasContainer.getBoundingClientRect();
   const screenScale = getScreenScale();
   const screenFontSize = parseFloat((getAbsFontSize(ann.fontSizeIdx) / screenScale).toFixed(2));
 
@@ -1075,13 +1087,13 @@ function openTextEditMode(ann) {
   document.getElementById('thicknessGroup').style.display = 'none';
   document.getElementById('fontSizeGroup').style.display = '';
 
-  // Position textarea at annotation's screen position, with border/padding offset
-  const sx = ann.x / screenScale + canvasRect.left - containerRect.left - 6;
-  const sy = ann.y / screenScale + canvasRect.top - containerRect.top - 4;
+  // Convert canvas coords to viewport coords (overlay is inside position:fixed editor-modal at 0,0)
+  const viewportX = ann.x / screenScale + canvasRect.left;
+  const viewportY = ann.y / screenScale + canvasRect.top;
 
   textInputOverlay.style.display = 'block';
-  textInputOverlay.style.left = sx + 'px';
-  textInputOverlay.style.top = sy + 'px';
+  textInputOverlay.style.left = (viewportX - 6) + 'px';
+  textInputOverlay.style.top = (viewportY - 4) + 'px';
 
   textInput.style.color = ann.color;
   textInput.style.fontSize = screenFontSize + 'px';
