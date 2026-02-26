@@ -1367,15 +1367,25 @@ async function saveEditedImage() {
     redrawCanvas(); // remove selection box before export
     showToast('保存中...', 'info');
     const blob = await new Promise(resolve => editorCanvas.toBlob(resolve, 'image/png'));
+
+    // Save to server
     const file = new File([blob], `edited_${Date.now()}.png`, { type: 'image/png' });
     const formData = new FormData();
     formData.append('image', file);
     const response = await fetch('/api/upload', { method: 'POST', body: formData });
     if (!response.ok) throw new Error('保存失败');
+
+    // Copy to clipboard
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    } catch (copyErr) {
+      console.error('复制到剪贴板失败:', copyErr);
+    }
+
     closeEditor();
     clearSelection();
     loadImages();
-    showToast('编辑后的图片已保存', 'success');
+    showToast('已保存并复制到剪贴板', 'success');
   } catch (error) {
     console.error('保存失败:', error);
     showToast('保存失败', 'error');
