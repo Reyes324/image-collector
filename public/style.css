@@ -625,18 +625,35 @@ header h1 {
   }
 }
 
-/* ========== Editor Modal ========== */
+/* ========== Editor Modal (centered card) ========== */
 .editor-modal {
   display: none;
   position: fixed;
   inset: 0;
   z-index: 2000;
-  background: #1C1917;
-  flex-direction: column;
+  background: rgba(28, 25, 23, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  align-items: center;
+  justify-content: center;
 }
 
 .editor-modal.active {
   display: flex;
+}
+
+.editor-inner {
+  display: flex;
+  flex-direction: column;
+  width: 90vw;
+  max-width: 960px;
+  height: 80vh;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  position: relative;
 }
 
 .editor-toolbar {
@@ -649,6 +666,7 @@ header h1 {
   background: #292524;
   border-bottom: 1px solid #44403C;
   flex-shrink: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .toolbar-group {
@@ -769,6 +787,7 @@ header h1 {
   justify-content: center;
   overflow: hidden;
   position: relative;
+  background: #1C1917;
 }
 
 #editorCanvas {
