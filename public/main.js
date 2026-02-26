@@ -29,6 +29,9 @@ const batchCopyBtn = document.getElementById('batchCopyBtn');
 const batchDeleteBtn = document.getElementById('batchDeleteBtn');
 const batchCancelBtn = document.getElementById('batchCancelBtn');
 
+// Rubber band selection element
+const selectionRect = document.getElementById('selectionRect');
+
 let currentImageData = null;
 
 // ========== Multi-select State ==========
@@ -36,6 +39,13 @@ const selectedCards = new Set(); // stores filenames
 let isSelectionMode = false;
 let lastClickedFilename = null; // for Shift+Click range selection
 let allCardFiles = []; // flat ordered list of {filename, path} for range selection
+
+// Rubber band state
+let rubberBand = {
+  active: false,
+  startX: 0,
+  startY: 0,
+};
 
 // ========== Init ==========
 document.addEventListener('DOMContentLoaded', () => {
@@ -169,6 +179,96 @@ function setupEventListeners() {
 
   // Editor toolbar
   setupEditor();
+
+  // Rubber band selection on gallery
+  setupRubberBandSelection();
+}
+
+// ========== Rubber Band Selection ==========
+function setupRubberBandSelection() {
+  // mousedown on the gallery container — only start if clicking empty space (not on a card)
+  gallery.addEventListener('mousedown', (e) => {
+    // Ignore if clicking on a card, button, or other interactive element
+    if (e.target.closest('.image-card') || e.target.closest('button') || e.target.closest('a')) return;
+    // Ignore if a modal is open
+    if (editorModal.classList.contains('active') || imageModal.classList.contains('active')) return;
+
+    rubberBand.active = true;
+    rubberBand.startX = e.clientX;
+    rubberBand.startY = e.clientY;
+
+    // If not holding Ctrl/Cmd, clear existing selection first
+    if (!e.ctrlKey && !e.metaKey) {
+      selectedCards.clear();
+      updateSelectionUI();
+    }
+
+    selectionRect.style.left = e.clientX + 'px';
+    selectionRect.style.top = e.clientY + 'px';
+    selectionRect.style.width = '0';
+    selectionRect.style.height = '0';
+    // Don't show until moved a bit
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!rubberBand.active) return;
+
+    const x = Math.min(e.clientX, rubberBand.startX);
+    const y = Math.min(e.clientY, rubberBand.startY);
+    const w = Math.abs(e.clientX - rubberBand.startX);
+    const h = Math.abs(e.clientY - rubberBand.startY);
+
+    // Only show after a small drag threshold
+    if (w > 5 || h > 5) {
+      selectionRect.style.display = 'block';
+      selectionRect.style.left = x + 'px';
+      selectionRect.style.top = y + 'px';
+      selectionRect.style.width = w + 'px';
+      selectionRect.style.height = h + 'px';
+
+      // Live highlight: check which cards intersect
+      highlightCardsInRect(x, y, w, h);
+    }
+  });
+
+  document.addEventListener('mouseup', (e) => {
+    if (!rubberBand.active) return;
+    rubberBand.active = false;
+    selectionRect.style.display = 'none';
+
+    const x = Math.min(e.clientX, rubberBand.startX);
+    const y = Math.min(e.clientY, rubberBand.startY);
+    const w = Math.abs(e.clientX - rubberBand.startX);
+    const h = Math.abs(e.clientY - rubberBand.startY);
+
+    // Only select if dragged a meaningful distance
+    if (w > 5 || h > 5) {
+      selectCardsInRect(x, y, w, h);
+    }
+  });
+}
+
+function highlightCardsInRect(rx, ry, rw, rh) {
+  document.querySelectorAll('.image-card').forEach(card => {
+    const cr = card.getBoundingClientRect();
+    const intersects = !(cr.right < rx || cr.left > rx + rw || cr.bottom < ry || cr.top > ry + rh);
+    // Temporarily show highlight (visual only, actual selection on mouseup)
+    card.classList.toggle('selected', intersects || selectedCards.has(card.dataset.filename));
+  });
+}
+
+function selectCardsInRect(rx, ry, rw, rh) {
+  document.querySelectorAll('.image-card').forEach(card => {
+    const cr = card.getBoundingClientRect();
+    const intersects = !(cr.right < rx || cr.left > rx + rw || cr.bottom < ry || cr.top > ry + rh);
+    if (intersects) {
+      selectedCards.add(card.dataset.filename);
+    }
+  });
+  if (selectedCards.size > 0) {
+    lastClickedFilename = [...selectedCards].pop();
+  }
+  updateSelectionUI();
 }
 
 // ========== Feishu/WeChat Drag Helpers ==========
@@ -325,10 +425,14 @@ function createImageCard(file) {
   info.className = 'image-info';
   info.textContent = formatTime(file.uploadTime);
 
-  // Selection checkbox
+  // Selection checkbox — clickable
   const checkbox = document.createElement('div');
   checkbox.className = 'card-select-checkbox';
   checkbox.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  checkbox.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleCardSelection(file.filename);
+  });
 
   // Action overlay
   const actionsOverlay = document.createElement('div');
