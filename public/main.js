@@ -22,7 +22,20 @@ const editorCancel = document.getElementById('editorCancel');
 const textInputOverlay = document.getElementById('textInputOverlay');
 const textInput = document.getElementById('textInput');
 
+// Batch action elements
+const batchActionBar = document.getElementById('batchActionBar');
+const batchCount = document.getElementById('batchCount');
+const batchCopyBtn = document.getElementById('batchCopyBtn');
+const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+const batchCancelBtn = document.getElementById('batchCancelBtn');
+
 let currentImageData = null;
+
+// ========== Multi-select State ==========
+const selectedCards = new Set(); // stores filenames
+let isSelectionMode = false;
+let lastClickedFilename = null; // for Shift+Click range selection
+let allCardFiles = []; // flat ordered list of {filename, path} for range selection
 
 // ========== Init ==========
 document.addEventListener('DOMContentLoaded', () => {
@@ -42,7 +55,17 @@ function setupEventListeners() {
 
   // Full-page drag & drop upload (only for external file drags, not card sorting)
   function isFileDrag(e) {
-    return e.dataTransfer && e.dataTransfer.types.includes('Files');
+    if (!e.dataTransfer) return false;
+    const types = e.dataTransfer.types;
+    // Standard file drag
+    if (types.includes('Files')) return true;
+    // Feishu/WeChat drag: image in text/html or text/uri-list (but not internal card sort which uses text/plain only)
+    if (types.includes('text/html') || types.includes('text/uri-list')) {
+      // Exclude internal card sort: it sets text/plain and nothing else meaningful
+      if (types.length === 1 && types.includes('text/plain')) return false;
+      return true;
+    }
+    return false;
   }
 
   document.addEventListener('dragenter', (e) => {
@@ -70,8 +93,33 @@ function setupEventListeners() {
       e.preventDefault();
       dragCounter = 0;
       dropOverlay.classList.remove('active');
+
+      // Strategy 1: Standard files
       if (e.dataTransfer.files.length > 0) {
         handleFiles(e.dataTransfer.files);
+        return;
+      }
+
+      // Strategy 2: Parse text/html for <img> tags (Feishu/WeChat)
+      const html = e.dataTransfer.getData('text/html');
+      if (html) {
+        const urls = extractImageUrlsFromHtml(html);
+        if (urls.length > 0) {
+          fetchAndUploadUrls(urls);
+          return;
+        }
+      }
+
+      // Strategy 3: Parse text/uri-list for image URLs
+      const uriList = e.dataTransfer.getData('text/uri-list');
+      if (uriList) {
+        const urls = uriList.split('\n')
+          .map(u => u.trim())
+          .filter(u => u && !u.startsWith('#') && /\.(jpe?g|png|gif|webp|bmp|svg)/i.test(u));
+        if (urls.length > 0) {
+          fetchAndUploadUrls(urls);
+          return;
+        }
       }
     }
   });
@@ -108,12 +156,64 @@ function setupEventListeners() {
         closeEditor();
       } else if (imageModal.classList.contains('active')) {
         closeModal();
+      } else if (isSelectionMode) {
+        clearSelection();
       }
     }
   });
 
+  // Batch actions
+  batchCopyBtn.addEventListener('click', batchCopy);
+  batchDeleteBtn.addEventListener('click', batchDelete);
+  batchCancelBtn.addEventListener('click', clearSelection);
+
   // Editor toolbar
   setupEditor();
+}
+
+// ========== Feishu/WeChat Drag Helpers ==========
+function extractImageUrlsFromHtml(html) {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const imgs = doc.querySelectorAll('img[src]');
+    const urls = [];
+    imgs.forEach(img => {
+      const src = img.getAttribute('src');
+      if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
+        urls.push(src);
+      }
+    });
+    return urls;
+  } catch {
+    return [];
+  }
+}
+
+async function fetchAndUploadUrls(urls) {
+  uploadBar.style.display = 'flex';
+  let successCount = 0;
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Fetch failed');
+      const blob = await response.blob();
+      if (!blob.type.startsWith('image/')) continue;
+      const ext = blob.type.split('/')[1] || 'png';
+      const file = new File([blob], `drag_${Date.now()}.${ext}`, { type: blob.type });
+      await uploadFile(file);
+      successCount++;
+    } catch (error) {
+      console.error('外部图片获取失败:', error);
+      showToast('无法获取外部图片，可能受 CORS 限制', 'error');
+    }
+  }
+
+  uploadBar.style.display = 'none';
+  if (successCount > 0) {
+    loadImages();
+    showToast(`成功上传 ${successCount} 张图片`, 'success');
+  }
 }
 
 // ========== File Upload ==========
@@ -141,6 +241,7 @@ async function handleFiles(files) {
   fileInput.value = '';
 
   if (successCount > 0) {
+    clearSelection();
     loadImages();
     showToast(`成功上传 ${successCount} 张图片`, 'success');
   }
@@ -169,6 +270,7 @@ async function loadImages() {
           </svg>
           <p>还没有图片，上传第一张吧</p>
         </div>`;
+      allCardFiles = [];
       return;
     }
     renderGallery(data);
@@ -180,6 +282,8 @@ async function loadImages() {
 
 function renderGallery(groups) {
   gallery.innerHTML = '';
+  allCardFiles = [];
+
   groups.forEach(group => {
     const dateGroup = document.createElement('div');
     dateGroup.className = 'date-group';
@@ -192,6 +296,7 @@ function renderGallery(groups) {
     imageGrid.className = 'image-grid';
 
     group.files.forEach(file => {
+      allCardFiles.push(file);
       const card = createImageCard(file);
       imageGrid.appendChild(card);
     });
@@ -208,6 +313,8 @@ function createImageCard(file) {
   const card = document.createElement('div');
   card.className = 'image-card';
   card.draggable = true;
+  card.dataset.filename = file.filename;
+  card.dataset.path = file.path;
 
   const img = document.createElement('img');
   img.src = file.path;
@@ -218,17 +325,226 @@ function createImageCard(file) {
   info.className = 'image-info';
   info.textContent = formatTime(file.uploadTime);
 
+  // Selection checkbox
+  const checkbox = document.createElement('div');
+  checkbox.className = 'card-select-checkbox';
+  checkbox.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+  // Action overlay
+  const actionsOverlay = document.createElement('div');
+  actionsOverlay.className = 'card-actions-overlay';
+
+  ['edit', 'copy', 'delete'].forEach(action => {
+    const btn = document.createElement('button');
+    btn.className = 'card-action-btn';
+    btn.dataset.action = action;
+    btn.title = action === 'edit' ? '编辑' : action === 'copy' ? '复制' : '删除';
+    btn.innerHTML = getActionIcon(action);
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleCardAction(action, file);
+    });
+    actionsOverlay.appendChild(btn);
+  });
+
   card.appendChild(img);
   card.appendChild(info);
+  card.appendChild(checkbox);
+  card.appendChild(actionsOverlay);
 
   // Prevent click from firing after drag
   let wasDragged = false;
   card.addEventListener('dragstart', () => { wasDragged = true; });
-  card.addEventListener('click', () => {
+  card.addEventListener('click', (e) => {
     if (wasDragged) { wasDragged = false; return; }
+
+    // Multi-select: Ctrl/Cmd+Click or Shift+Click
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      toggleCardSelection(file.filename);
+      return;
+    }
+    if (e.shiftKey && lastClickedFilename) {
+      e.preventDefault();
+      rangeSelect(file.filename);
+      return;
+    }
+
+    // If in selection mode, toggle instead of opening modal
+    if (isSelectionMode) {
+      toggleCardSelection(file.filename);
+      return;
+    }
+
     openModal(file);
   });
   return card;
+}
+
+// ========== Card Action Icons & Handlers ==========
+function getActionIcon(action) {
+  switch (action) {
+    case 'edit':
+      return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+    case 'copy':
+      return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    case 'delete':
+      return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    default:
+      return '';
+  }
+}
+
+function handleCardAction(action, file) {
+  switch (action) {
+    case 'edit':
+      currentImageData = file;
+      openEditor();
+      break;
+    case 'copy':
+      copyImageByPath(file.path);
+      break;
+    case 'delete':
+      deleteImageByFilename(file.filename);
+      break;
+  }
+}
+
+async function copyImageByPath(path) {
+  try {
+    const response = await fetch(path);
+    const blob = await response.blob();
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(blob);
+    const pngBlob = await new Promise((resolve, reject) => {
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(objectUrl);
+        canvas.toBlob((b) => {
+          if (b) resolve(b);
+          else reject(new Error('转换 PNG 失败'));
+        }, 'image/png');
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('加载图片失败'));
+      };
+      img.src = objectUrl;
+    });
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+    showToast('图片已复制到剪贴板', 'success');
+  } catch (error) {
+    console.error('复制失败:', error);
+    showToast('复制失败', 'error');
+  }
+}
+
+async function deleteImageByFilename(filename) {
+  if (!confirm('确定要删除这张图片吗？')) return;
+  try {
+    const response = await fetch(`/api/delete?filename=${encodeURIComponent(filename)}`, {
+      method: 'DELETE'
+    });
+    if (response.ok) {
+      showToast('图片已删除', 'success');
+      clearSelection();
+      loadImages();
+    } else {
+      showToast('删除失败', 'error');
+    }
+  } catch (error) {
+    console.error('删除失败:', error);
+    showToast('删除失败', 'error');
+  }
+}
+
+// ========== Multi-select ==========
+function toggleCardSelection(filename) {
+  if (selectedCards.has(filename)) {
+    selectedCards.delete(filename);
+  } else {
+    selectedCards.add(filename);
+  }
+  lastClickedFilename = filename;
+  updateSelectionUI();
+}
+
+function rangeSelect(toFilename) {
+  const fromIdx = allCardFiles.findIndex(f => f.filename === lastClickedFilename);
+  const toIdx = allCardFiles.findIndex(f => f.filename === toFilename);
+  if (fromIdx === -1 || toIdx === -1) return;
+
+  const start = Math.min(fromIdx, toIdx);
+  const end = Math.max(fromIdx, toIdx);
+  for (let i = start; i <= end; i++) {
+    selectedCards.add(allCardFiles[i].filename);
+  }
+  updateSelectionUI();
+}
+
+function clearSelection() {
+  selectedCards.clear();
+  isSelectionMode = false;
+  lastClickedFilename = null;
+  updateSelectionUI();
+}
+
+function updateSelectionUI() {
+  isSelectionMode = selectedCards.size > 0;
+
+  // Update card visual state
+  document.querySelectorAll('.image-card').forEach(card => {
+    const fn = card.dataset.filename;
+    card.classList.toggle('selected', selectedCards.has(fn));
+  });
+
+  // Update batch action bar
+  if (selectedCards.size > 0) {
+    batchActionBar.style.display = 'flex';
+    batchCount.textContent = `已选择 ${selectedCards.size} 张`;
+  } else {
+    batchActionBar.style.display = 'none';
+  }
+}
+
+async function batchCopy() {
+  if (selectedCards.size === 0) return;
+  if (selectedCards.size > 1) {
+    showToast('仅支持复制单张图片到剪贴板', 'info');
+    return;
+  }
+  const filename = [...selectedCards][0];
+  const file = allCardFiles.find(f => f.filename === filename);
+  if (file) {
+    await copyImageByPath(file.path);
+  }
+}
+
+async function batchDelete() {
+  if (selectedCards.size === 0) return;
+  if (!confirm(`确定要删除选中的 ${selectedCards.size} 张图片吗？`)) return;
+
+  let successCount = 0;
+  for (const filename of selectedCards) {
+    try {
+      const response = await fetch(`/api/delete?filename=${encodeURIComponent(filename)}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) successCount++;
+    } catch (error) {
+      console.error('删除失败:', filename, error);
+    }
+  }
+
+  clearSelection();
+  loadImages();
+  if (successCount > 0) {
+    showToast(`成功删除 ${successCount} 张图片`, 'success');
+  }
 }
 
 // ========== Drag & Drop Sorting ==========
@@ -307,37 +623,8 @@ function closeModal() {
 }
 
 async function copyImage() {
-  try {
-    // Clipboard API only supports image/png — convert all formats via canvas
-    const response = await fetch(currentImageData.path);
-    const blob = await response.blob();
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(blob);
-    const pngBlob = await new Promise((resolve, reject) => {
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        URL.revokeObjectURL(objectUrl);
-        canvas.toBlob((b) => {
-          if (b) resolve(b);
-          else reject(new Error('转换 PNG 失败'));
-        }, 'image/png');
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error('加载图片失败'));
-      };
-      img.src = objectUrl;
-    });
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
-    showToast('图片已复制到剪贴板', 'success');
-  } catch (error) {
-    console.error('复制失败:', error);
-    showToast('复制失败', 'error');
-  }
+  if (!currentImageData) return;
+  await copyImageByPath(currentImageData.path);
 }
 
 function downloadImage() {
@@ -351,6 +638,7 @@ function downloadImage() {
 }
 
 async function deleteImage() {
+  if (!currentImageData) return;
   if (!confirm('确定要删除这张图片吗？')) return;
   try {
     const response = await fetch(`/api/delete?filename=${encodeURIComponent(currentImageData.filename)}`, {
@@ -359,6 +647,7 @@ async function deleteImage() {
     if (response.ok) {
       showToast('图片已删除', 'success');
       closeModal();
+      clearSelection();
       loadImages();
     } else {
       showToast('删除失败', 'error');
@@ -541,7 +830,7 @@ function distToSegment(p, x1, y1, x2, y2) {
 }
 
 function getAbsFontSize(idx) {
-  return Math.max(18, Math.round(editorCanvas.width * FONT_SIZES[idx]));
+  return Math.max(18, parseFloat((editorCanvas.width * FONT_SIZES[idx]).toFixed(2)));
 }
 
 // --- Canvas events ---
@@ -731,17 +1020,18 @@ function drawSelectionBox(ctx, ann) {
   ctx.restore();
 }
 
-// --- Text input ---
+// --- Text input (WYSIWYG fixed) ---
 function showTextInput(screenX, screenY, canvasX, canvasY) {
   const containerRect = editorCanvasContainer.getBoundingClientRect();
   const screenScale = getScreenScale();
-  const screenFontSize = Math.round(getAbsFontSize(editorState.fontSize) / screenScale);
+  const screenFontSize = parseFloat((getAbsFontSize(editorState.fontSize) / screenScale).toFixed(2));
 
   editorState.editingAnnotationId = null;
 
   textInputOverlay.style.display = 'block';
-  textInputOverlay.style.left = (screenX - containerRect.left) + 'px';
-  textInputOverlay.style.top = (screenY - containerRect.top) + 'px';
+  // Offset by border(2px) + padding(4px left, 2px top) to align text position
+  textInputOverlay.style.left = (screenX - containerRect.left - 6) + 'px';
+  textInputOverlay.style.top = (screenY - containerRect.top - 4) + 'px';
 
   textInput.style.color = editorState.color;
   textInput.style.fontSize = screenFontSize + 'px';
@@ -762,7 +1052,7 @@ function openTextEditMode(ann) {
   const canvasRect = editorCanvas.getBoundingClientRect();
   const containerRect = editorCanvasContainer.getBoundingClientRect();
   const screenScale = getScreenScale();
-  const screenFontSize = Math.round(getAbsFontSize(ann.fontSizeIdx) / screenScale);
+  const screenFontSize = parseFloat((getAbsFontSize(ann.fontSizeIdx) / screenScale).toFixed(2));
 
   // Set editor state to match annotation
   editorState.editingAnnotationId = ann.id;
@@ -785,9 +1075,9 @@ function openTextEditMode(ann) {
   document.getElementById('thicknessGroup').style.display = 'none';
   document.getElementById('fontSizeGroup').style.display = '';
 
-  // Position textarea at annotation's screen position
-  const sx = ann.x / screenScale + canvasRect.left - containerRect.left;
-  const sy = ann.y / screenScale + canvasRect.top - containerRect.top;
+  // Position textarea at annotation's screen position, with border/padding offset
+  const sx = ann.x / screenScale + canvasRect.left - containerRect.left - 6;
+  const sy = ann.y / screenScale + canvasRect.top - containerRect.top - 4;
 
   textInputOverlay.style.display = 'block';
   textInputOverlay.style.left = sx + 'px';
@@ -808,7 +1098,7 @@ function openTextEditMode(ann) {
 
 function autoResizeTextInput() {
   const screenScale = getScreenScale();
-  const screenFontSize = Math.round(getAbsFontSize(editorState.fontSize) / screenScale);
+  const screenFontSize = parseFloat((getAbsFontSize(editorState.fontSize) / screenScale).toFixed(2));
 
   // Measure longest line width
   const measureCtx = document.createElement('canvas').getContext('2d');
@@ -929,6 +1219,7 @@ async function saveEditedImage() {
     const response = await fetch('/api/upload', { method: 'POST', body: formData });
     if (!response.ok) throw new Error('保存失败');
     closeEditor();
+    clearSelection();
     loadImages();
     showToast('编辑后的图片已保存', 'success');
   } catch (error) {

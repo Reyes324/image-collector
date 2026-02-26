@@ -1,7 +1,7 @@
 /* ==========================================
    Design System: 图片文档集
    Generated with UI UX Pro Max
-   Style: Micro-interactions + Flat Design
+   Style: Glassmorphism + Micro-interactions
    Colors: Teal focus + action orange
    Typography: Plus Jakarta Sans
    ========================================== */
@@ -16,7 +16,7 @@
   /* UUPM Color Palette — Teal focus + action orange */
   --primary: #0D9488;
   --primary-hover: #0F766E;
-  --primary-light: rgba(13, 148, 136, 0.08);
+  --primary-light: rgba(13, 148, 136, 0.15);
   --secondary: #14B8A6;
   --cta: #F97316;
   --cta-hover: #EA580C;
@@ -24,40 +24,27 @@
   --danger-hover: #dc2626;
   --success: #10b981;
 
-  /* Surface & Text — WCAG 4.5:1 minimum */
-  --bg: #F0FDFA;
-  --card-bg: #ffffff;
-  --text: #134E4A;
-  --text-secondary: #475569;
-  --border: #d1d5db;
+  /* Glassmorphism surfaces */
+  --bg: linear-gradient(135deg, #667eea, #764ba2);
+  --card-bg: rgba(255, 255, 255, 0.12);
+  --text: #fff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --border: rgba(255, 255, 255, 0.18);
+  --glass-blur: blur(12px);
 
-  /* Flat Design — no heavy shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1);
+  /* Glass shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.2);
 
   /* Spacing & Radius — 8px base unit */
-  --radius: 8px;
-  --radius-lg: 12px;
+  --radius: 10px;
+  --radius-lg: 14px;
 
   /* Micro-interactions timing */
   --transition-fast: 80ms ease;
   --transition: 150ms ease;
   --transition-slow: 250ms ease;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0F172A;
-    --card-bg: #1E293B;
-    --text: #F1F5F9;
-    --text-secondary: #94A3B8;
-    --border: #334155;
-    --primary-light: rgba(13, 148, 136, 0.15);
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
-    --shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
-  }
 }
 
 /* Respect reduced-motion preference */
@@ -70,7 +57,8 @@
 
 body {
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: var(--bg);
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  background-attachment: fixed;
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
@@ -92,13 +80,19 @@ body {
   .container { padding: 48px 32px; }
 }
 
-/* ========== Header (compact toolbar) ========== */
+/* ========== Header (glass toolbar) ========== */
 header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 24px;
   gap: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-lg);
+  padding: 10px 18px;
 }
 
 .header-left {
@@ -117,7 +111,7 @@ header h1 {
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--text);
+  color: #fff;
   white-space: nowrap;
 }
 
@@ -129,8 +123,7 @@ header h1 {
 
 .upload-hint {
   font-size: 0.7rem;
-  color: var(--text-secondary);
-  opacity: 0.6;
+  color: rgba(255, 255, 255, 0.5);
   white-space: nowrap;
 }
 
@@ -142,9 +135,11 @@ header h1 {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: var(--primary);
+  background: rgba(13, 148, 136, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: white;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 7px 14px;
   border-radius: var(--radius);
   font-size: 0.8rem;
@@ -156,7 +151,7 @@ header h1 {
 }
 
 .upload-btn:hover {
-  background: var(--primary-hover);
+  background: rgba(13, 148, 136, 0.8);
 }
 
 .upload-btn:active {
@@ -170,10 +165,13 @@ header h1 {
   gap: 8px;
   padding: 8px 14px;
   margin-bottom: 16px;
-  background: var(--primary-light);
+  background: rgba(13, 148, 136, 0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius);
   font-size: 0.8rem;
-  color: var(--primary);
+  color: #5eead4;
   font-weight: 500;
 }
 
@@ -183,9 +181,9 @@ header h1 {
   position: fixed;
   inset: 0;
   z-index: 900;
-  background: rgba(13, 148, 136, 0.08);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: rgba(102, 126, 234, 0.15);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .drop-overlay.active {
@@ -199,11 +197,13 @@ header h1 {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  color: var(--primary);
+  color: #fff;
   padding: 48px;
-  border: 3px dashed var(--primary);
+  border: 3px dashed rgba(255, 255, 255, 0.4);
   border-radius: 20px;
-  background: var(--card-bg);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   box-shadow: var(--shadow-lg);
 }
 
@@ -215,8 +215,8 @@ header h1 {
 .spinner {
   width: 28px;
   height: 28px;
-  border: 3px solid var(--border);
-  border-top-color: var(--primary);
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--secondary);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -249,9 +249,9 @@ header h1 {
 }
 
 .empty-state svg {
-  opacity: 0.25;
+  opacity: 0.35;
   margin-bottom: 12px;
-  color: var(--primary);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .date-group {
@@ -261,11 +261,11 @@ header h1 {
 .date-header {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.8);
   letter-spacing: 0.04em;
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .image-grid {
@@ -281,21 +281,24 @@ header h1 {
   }
 }
 
-/* ========== Image Card — Flat Design + Micro-interactions ========== */
+/* ========== Image Card — Glassmorphism + Micro-interactions ========== */
 .image-card {
   background: var(--card-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-radius: var(--radius);
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   cursor: pointer;
-  transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
+  transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition), background var(--transition);
   position: relative;
 }
 
 .image-card:hover {
   transform: translateY(-2px);
-  border-color: var(--secondary);
-  box-shadow: var(--shadow);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .image-card:active {
@@ -312,8 +315,9 @@ header h1 {
 .image-info {
   padding: 8px 10px;
   font-size: 0.75rem;
-  color: var(--text-secondary);
-  border-top: 1px solid var(--border);
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* Drag & Drop Sorting */
@@ -335,6 +339,159 @@ header h1 {
   border-right: 3px solid var(--cta);
 }
 
+/* ========== Card Actions Overlay ========== */
+.card-actions-overlay {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--transition);
+  z-index: 5;
+}
+
+@media (hover: hover) {
+  .image-card:hover .card-actions-overlay {
+    opacity: 1;
+  }
+}
+
+.card-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition), border-color var(--transition), transform var(--transition-fast);
+  padding: 0;
+}
+
+.card-action-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: scale(1.1);
+}
+
+.card-action-btn:active {
+  transform: scale(0.95);
+}
+
+.card-action-btn[data-action="delete"]:hover {
+  background: rgba(239, 68, 68, 0.6);
+  border-color: rgba(239, 68, 68, 0.8);
+}
+
+/* ========== Card Selection (Multi-select) ========== */
+.card-select-checkbox {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition), background var(--transition), border-color var(--transition);
+  z-index: 4;
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .image-card:hover .card-select-checkbox {
+    opacity: 0.7;
+  }
+}
+
+.image-card.selected .card-select-checkbox {
+  opacity: 1;
+  background: var(--cta);
+  border-color: var(--cta);
+}
+
+.image-card.selected {
+  border-color: var(--cta);
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.4);
+}
+
+/* ========== Batch Action Bar ========== */
+.batch-action-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: rgba(30, 30, 50, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  z-index: 800;
+  animation: batchBarIn 0.2s ease;
+}
+
+@keyframes batchBarIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.batch-count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+}
+
+.batch-action-bar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition-fast);
+  white-space: nowrap;
+}
+
+.batch-action-bar button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.batch-action-bar button:active {
+  transform: scale(0.96);
+}
+
+#batchDeleteBtn {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+#batchDeleteBtn:hover {
+  background: rgba(239, 68, 68, 0.5);
+}
+
 /* ========== Image Modal ========== */
 .image-modal {
   display: none;
@@ -352,9 +509,9 @@ header h1 {
 .modal-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.88);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(15, 15, 30, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .modal-content {
@@ -643,7 +800,7 @@ header h1 {
   display: block;
 }
 
-/* ========== Toast — Micro-interaction feedback ========== */
+/* ========== Toast — Glass feedback ========== */
 .toast {
   position: fixed;
   bottom: 24px;
@@ -658,6 +815,9 @@ header h1 {
   z-index: 3000;
   animation: toastIn 0.2s ease;
   color: white;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 @keyframes toastIn {
@@ -671,9 +831,9 @@ header h1 {
   }
 }
 
-.toast.success { background: var(--success); }
-.toast.error { background: var(--danger); }
-.toast.info { background: var(--primary); }
+.toast.success { background: rgba(16, 185, 129, 0.85); }
+.toast.error { background: rgba(239, 68, 68, 0.85); }
+.toast.info { background: rgba(13, 148, 136, 0.85); }
 
 /* ========== Focus styles for keyboard navigation ========== */
 *:focus-visible {
