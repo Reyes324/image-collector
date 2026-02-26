@@ -186,10 +186,11 @@ function setupEventListeners() {
 
 // ========== Rubber Band Selection ==========
 function setupRubberBandSelection() {
-  // mousedown on the gallery container — only start if clicking empty space (not on a card)
-  gallery.addEventListener('mousedown', (e) => {
-    // Ignore if clicking on a card, button, or other interactive element
-    if (e.target.closest('.image-card') || e.target.closest('button') || e.target.closest('a')) return;
+  // mousedown anywhere on the page — only start if clicking empty space (not on interactive elements)
+  document.addEventListener('mousedown', (e) => {
+    // Ignore if clicking on a card, button, input, link, header, modal, or batch bar
+    if (e.target.closest('.image-card') || e.target.closest('button') || e.target.closest('a') ||
+        e.target.closest('input') || e.target.closest('header') || e.target.closest('.batch-action-bar')) return;
     // Ignore if a modal is open
     if (editorModal.classList.contains('active') || imageModal.classList.contains('active')) return;
 
