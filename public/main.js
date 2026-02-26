@@ -618,14 +618,57 @@ function updateSelectionUI() {
 
 async function batchCopy() {
   if (selectedCards.size === 0) return;
-  if (selectedCards.size > 1) {
-    showToast('仅支持复制单张图片到剪贴板', 'info');
+
+  const filenames = [...selectedCards];
+  const items = [];
+
+  for (const filename of filenames) {
+    const file = allCardFiles.find(f => f.filename === filename);
+    if (!file) continue;
+    try {
+      const response = await fetch(file.path);
+      const blob = await response.blob();
+      // Convert to PNG for clipboard compatibility
+      const pngBlob = await new Promise((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(blob);
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          URL.revokeObjectURL(objectUrl);
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('转换失败')), 'image/png');
+        };
+        img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('加载失败')); };
+        img.src = objectUrl;
+      });
+      items.push(new ClipboardItem({ 'image/png': pngBlob }));
+    } catch (err) {
+      console.error('处理图片失败:', filename, err);
+    }
+  }
+
+  if (items.length === 0) {
+    showToast('复制失败', 'error');
     return;
   }
-  const filename = [...selectedCards][0];
-  const file = allCardFiles.find(f => f.filename === filename);
-  if (file) {
-    await copyImageByPath(file.path);
+
+  try {
+    await navigator.clipboard.write(items);
+    showToast(`已复制 ${items.length} 张图片到剪贴板`, 'success');
+  } catch (err) {
+    // Fallback: some browsers only support single ClipboardItem
+    if (items.length > 1) {
+      try {
+        await navigator.clipboard.write([items[0]]);
+        showToast(`浏览器限制，仅复制了第 1 张图片`, 'info');
+      } catch (err2) {
+        showToast('复制失败', 'error');
+      }
+    } else {
+      showToast('复制失败', 'error');
+    }
   }
 }
 
@@ -847,6 +890,7 @@ function setupEditor() {
   });
 
   editorUndo.addEventListener('click', editorUndoAction);
+  document.getElementById('editorCopyCanvas').addEventListener('click', copyCanvasToClipboard);
   editorSave.addEventListener('click', saveEditedImage);
   editorCancel.addEventListener('click', closeEditor);
 
@@ -1362,31 +1406,34 @@ function closeEditor() {
   editorState.editingAnnotationId = null;
 }
 
+async function copyCanvasToClipboard() {
+  try {
+    editorState.selectedId = null;
+    redrawCanvas();
+    const blob = await new Promise(resolve => editorCanvas.toBlob(resolve, 'image/png'));
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    showToast('已复制到剪贴板', 'success');
+  } catch (error) {
+    console.error('复制失败:', error);
+    showToast('复制失败', 'error');
+  }
+}
+
 async function saveEditedImage() {
   try {
     editorState.selectedId = null;
-    redrawCanvas(); // remove selection box before export
+    redrawCanvas();
     showToast('保存中...', 'info');
     const blob = await new Promise(resolve => editorCanvas.toBlob(resolve, 'image/png'));
-
-    // Save to server
     const file = new File([blob], `edited_${Date.now()}.png`, { type: 'image/png' });
     const formData = new FormData();
     formData.append('image', file);
     const response = await fetch('/api/upload', { method: 'POST', body: formData });
     if (!response.ok) throw new Error('保存失败');
-
-    // Copy to clipboard
-    try {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-    } catch (copyErr) {
-      console.error('复制到剪贴板失败:', copyErr);
-    }
-
     closeEditor();
     clearSelection();
     loadImages();
-    showToast('已保存并复制到剪贴板', 'success');
+    showToast('编辑后的图片已保存', 'success');
   } catch (error) {
     console.error('保存失败:', error);
     showToast('保存失败', 'error');
