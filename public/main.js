@@ -940,7 +940,7 @@ function hitTest(pos) {
       }
     } else if (ann.type === 'rect') {
       // Hit if near any edge of the rectangle
-      const bw = ann.borderWidth || 4;
+      const bw = ann.borderWidth || 12;
       const inOuter = pos.x >= ann.x - tol && pos.x <= ann.x + ann.width + tol &&
                       pos.y >= ann.y - tol && pos.y <= ann.y + ann.height + tol;
       const inInner = pos.x >= ann.x + bw + tol && pos.x <= ann.x + ann.width - bw - tol &&
@@ -1076,7 +1076,7 @@ function onCanvasMouseMove(e) {
       const ry = Math.min(editorState.startY, pos.y);
       const rw = Math.abs(pos.x - editorState.startX);
       const rh = Math.abs(pos.y - editorState.startY);
-      drawRect(ctx, rx, ry, rw, rh, editorState.color, 4);
+      drawRect(ctx, rx, ry, rw, rh, editorState.color, 12);
     } else {
       // Arrow preview
       drawArrow(ctx, editorState.startX, editorState.startY, pos.x, pos.y,
@@ -1119,7 +1119,7 @@ function onCanvasMouseUp(e) {
           width: Math.abs(pos.x - editorState.startX),
           height: Math.abs(pos.y - editorState.startY),
           color: editorState.color,
-          borderWidth: 4,
+          borderWidth: 12,
         });
       } else {
         editorState.annotations.push({
