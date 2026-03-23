@@ -792,7 +792,7 @@ async function deleteImage() {
 }
 
 // ========== Image Editor (Object-based) ==========
-const THICKNESS = [4, 8, 14];        // Arrow line widths: thin, medium, thick
+const THICKNESS = [6, 12, 20];        // Arrow line widths: thin, medium, thick
 const FONT_SIZES = [0.025, 0.04, 0.065]; // Relative to canvas width
 const HIT_TOLERANCE = 18;            // px tolerance for clicking annotations
 
@@ -843,6 +843,7 @@ function setupEditor() {
       editorState.selectedId = null;
       thicknessGroup.style.display = editorState.tool === 'arrow' ? '' : 'none';
       fontSizeGroup.style.display = editorState.tool === 'text' ? '' : 'none';
+      editorCanvas.style.cursor = editorState.tool === 'text' ? 'text' : 'crosshair';
       redrawCanvas();
     });
   });
@@ -937,6 +938,14 @@ function hitTest(pos) {
       if (distToSegment(pos, ann.fromX, ann.fromY, ann.toX, ann.toY) < tol + ann.thickness * 2) {
         return ann;
       }
+    } else if (ann.type === 'rect') {
+      // Hit if near any edge of the rectangle
+      const bw = ann.borderWidth || 4;
+      const inOuter = pos.x >= ann.x - tol && pos.x <= ann.x + ann.width + tol &&
+                      pos.y >= ann.y - tol && pos.y <= ann.y + ann.height + tol;
+      const inInner = pos.x >= ann.x + bw + tol && pos.x <= ann.x + ann.width - bw - tol &&
+                      pos.y >= ann.y + bw + tol && pos.y <= ann.y + ann.height - bw - tol;
+      if (inOuter && !inInner) return ann;
     } else if (ann.type === 'text') {
       const m = getTextMetrics(ann.text, ann.fontSizeIdx);
       if (pos.x >= ann.x - 4 && pos.x <= ann.x + m.width + 4 &&
@@ -1006,7 +1015,7 @@ function onCanvasMouseDown(e) {
     return;
   }
 
-  // Arrow tool: grab existing annotation
+  // Arrow/Rect tool: grab existing annotation
   if (hit) {
     editorState.selectedId = hit.id;
     editorState.dragging = true;
@@ -1017,7 +1026,7 @@ function onCanvasMouseDown(e) {
     return;
   }
 
-  // Arrow: start drawing
+  // Arrow/Rect: start drawing
   editorState.selectedId = null;
   editorState.drawing = true;
   editorState.startX = pos.x;
@@ -1046,6 +1055,8 @@ function onCanvasMouseMove(e) {
       if (ann.type === 'arrow') {
         ann.fromX += dx; ann.fromY += dy;
         ann.toX += dx; ann.toY += dy;
+      } else if (ann.type === 'rect') {
+        ann.x += dx; ann.y += dy;
       } else if (ann.type === 'text') {
         ann.x += dx; ann.y += dy;
       }
@@ -1057,11 +1068,20 @@ function onCanvasMouseMove(e) {
   }
 
   if (editorState.drawing) {
-    // Arrow preview
     redrawCanvas();
     const ctx = editorCanvas.getContext('2d');
-    drawArrow(ctx, editorState.startX, editorState.startY, pos.x, pos.y,
-      editorState.color, THICKNESS[editorState.thickness]);
+    if (editorState.tool === 'rect') {
+      // Rect preview
+      const rx = Math.min(editorState.startX, pos.x);
+      const ry = Math.min(editorState.startY, pos.y);
+      const rw = Math.abs(pos.x - editorState.startX);
+      const rh = Math.abs(pos.y - editorState.startY);
+      drawRect(ctx, rx, ry, rw, rh, editorState.color, 4);
+    } else {
+      // Arrow preview
+      drawArrow(ctx, editorState.startX, editorState.startY, pos.x, pos.y,
+        editorState.color, THICKNESS[editorState.thickness]);
+    }
     return;
   }
 
@@ -1090,14 +1110,27 @@ function onCanvasMouseUp(e) {
     const pos = getCanvasPos(e);
     const dist = Math.hypot(pos.x - editorState.startX, pos.y - editorState.startY);
     if (dist > 8) {
-      editorState.annotations.push({
-        id: editorState.nextId++,
-        type: 'arrow',
-        fromX: editorState.startX, fromY: editorState.startY,
-        toX: pos.x, toY: pos.y,
-        color: editorState.color,
-        thickness: THICKNESS[editorState.thickness],
-      });
+      if (editorState.tool === 'rect') {
+        editorState.annotations.push({
+          id: editorState.nextId++,
+          type: 'rect',
+          x: Math.min(editorState.startX, pos.x),
+          y: Math.min(editorState.startY, pos.y),
+          width: Math.abs(pos.x - editorState.startX),
+          height: Math.abs(pos.y - editorState.startY),
+          color: editorState.color,
+          borderWidth: 4,
+        });
+      } else {
+        editorState.annotations.push({
+          id: editorState.nextId++,
+          type: 'arrow',
+          fromX: editorState.startX, fromY: editorState.startY,
+          toX: pos.x, toY: pos.y,
+          color: editorState.color,
+          thickness: THICKNESS[editorState.thickness],
+        });
+      }
     }
     redrawCanvas();
   }
@@ -1115,6 +1148,8 @@ function redrawCanvas() {
     if (ann.id === editorState.editingAnnotationId) continue;
     if (ann.type === 'arrow') {
       drawArrow(ctx, ann.fromX, ann.fromY, ann.toX, ann.toY, ann.color, ann.thickness);
+    } else if (ann.type === 'rect') {
+      drawRect(ctx, ann.x, ann.y, ann.width, ann.height, ann.color, ann.borderWidth);
     } else if (ann.type === 'text') {
       drawText(ctx, ann);
     }
@@ -1123,6 +1158,17 @@ function redrawCanvas() {
       drawSelectionBox(ctx, ann);
     }
   }
+}
+
+function drawRect(ctx, x, y, w, h, color, borderWidth) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = borderWidth;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 8);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawArrow(ctx, fromX, fromY, toX, toY, color, lineW) {
@@ -1178,6 +1224,9 @@ function drawSelectionBox(ctx, ann) {
     y = Math.min(ann.fromY, ann.toY) - 6;
     w = Math.abs(ann.toX - ann.fromX) + 12;
     h = Math.abs(ann.toY - ann.fromY) + 12;
+  } else if (ann.type === 'rect') {
+    x = ann.x - 6; y = ann.y - 6;
+    w = ann.width + 12; h = ann.height + 12;
   } else {
     const m = getTextMetrics(ann.text, ann.fontSizeIdx);
     x = ann.x - 4; y = ann.y - 4;
